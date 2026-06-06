@@ -25,11 +25,24 @@ _ARCH_FROM_E_MACHINE: dict[str, str] = {
 }
 
 
+def _resolve_arch(e_machine: str, elfclass: int) -> str:
+    """Map an ELF ``e_machine`` constant to a container-style arch string.
+
+    RISC-V is the one architecture in the table where the conventional arch
+    string also encodes bit width (``riscv64`` / ``riscv32`` — matching the
+    ``linux/riscv64`` Docker platform); decide the suffix from ``elfclass``.
+    """
+    arch = _ARCH_FROM_E_MACHINE.get(e_machine, e_machine)
+    if arch == "riscv":
+        return "riscv64" if elfclass == 64 else "riscv32"
+    return arch
+
+
 def probe_elf(path: Path) -> ElfProbe:
     """Inspect *path* as an ELF binary and return a typed probe."""
     with path.open("rb") as fh:
         elf = ELFFile(fh)
-        arch = _ARCH_FROM_E_MACHINE.get(elf["e_machine"], elf["e_machine"])
+        arch = _resolve_arch(elf["e_machine"], elf.elfclass)
         bit: Literal[32, 64] = 64 if elf.elfclass == 64 else 32
         endianness: Literal["little", "big"] = "little" if elf.little_endian else "big"
         interpreter = _read_interpreter(elf)
