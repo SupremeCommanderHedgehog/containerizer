@@ -27,6 +27,53 @@ def test_detect_kind_unknown(tmp_path: Path) -> None:
     assert detect_kind(f) is InstallerKind.unknown
 
 
+def test_detect_kind_deb(tmp_path: Path) -> None:
+    f = tmp_path / "x.deb"
+    f.write_bytes(b"!<arch>\n" + b"\x00" * 32)
+    assert detect_kind(f) is InstallerKind.deb
+
+
+def test_detect_kind_rpm(tmp_path: Path) -> None:
+    f = tmp_path / "x.rpm"
+    f.write_bytes(b"\xed\xab\xee\xdb" + b"\x00" * 32)
+    assert detect_kind(f) is InstallerKind.rpm
+
+
+def test_detect_kind_shell(tmp_path: Path) -> None:
+    f = tmp_path / "install.sh"
+    f.write_bytes(b"#!/bin/sh\necho hi\n")
+    assert detect_kind(f) is InstallerKind.shell
+
+
+def test_detect_kind_tarball_gzip(tmp_path: Path) -> None:
+    f = tmp_path / "x.tar.gz"
+    f.write_bytes(b"\x1f\x8b" + b"\x00" * 32)
+    assert detect_kind(f) is InstallerKind.tarball
+
+
+def test_detect_kind_tarball_xz(tmp_path: Path) -> None:
+    f = tmp_path / "x.tar.xz"
+    f.write_bytes(b"\xfd7zXZ\x00" + b"\x00" * 32)
+    assert detect_kind(f) is InstallerKind.tarball
+
+
+def test_detect_kind_tarball_ustar(tmp_path: Path) -> None:
+    f = tmp_path / "x.tar"
+    # POSIX tar header: 257 bytes of file metadata, then "ustar" at offset 257.
+    head = bytearray(b"\x00" * 257)
+    head += b"ustar\x0000"
+    head += b"\x00" * (512 - len(head))
+    f.write_bytes(bytes(head))
+    assert detect_kind(f) is InstallerKind.tarball
+
+
+def test_detect_kind_appimage(tmp_path: Path) -> None:
+    f = tmp_path / "x.AppImage"
+    # ELF header with the AppImage marker (AI\x02) in the first 32 bytes.
+    f.write_bytes(b"\x7fELF" + b"\x00" * 4 + b"AI\x02" + b"\x00" * 32)
+    assert detect_kind(f) is InstallerKind.appimage
+
+
 def test_probe_elf_round_trip(elf_path: Path) -> None:
     result = probe(elf_path)
     assert result.kind is InstallerKind.elf
