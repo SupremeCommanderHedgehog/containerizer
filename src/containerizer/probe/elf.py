@@ -31,9 +31,7 @@ def probe_elf(path: Path) -> ElfProbe:
         elf = ELFFile(fh)
         arch = _ARCH_FROM_E_MACHINE.get(elf["e_machine"], elf["e_machine"])
         bit: Literal[32, 64] = 64 if elf.elfclass == 64 else 32
-        endianness: Literal["little", "big"] = (
-            "little" if elf.little_endian else "big"
-        )
+        endianness: Literal["little", "big"] = "little" if elf.little_endian else "big"
         interpreter = _read_interpreter(elf)
         needed_libs, has_dynamic = _read_dynamic(elf)
         is_static = interpreter is None and not has_dynamic
