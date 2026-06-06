@@ -23,6 +23,13 @@ jobs:
         with:
           languages: python
           queries: security-and-quality
+      # Code scanning requires GitHub Advanced Security on personal private
+      # repos. Until GHAS is enabled, the SARIF upload step inside analyze
+      # returns a 404 ("Code scanning is not enabled for this repository")
+      # and fails the job. Marking the step continue-on-error keeps the
+      # workflow green so it does not block PRs; CodeQL still runs and its
+      # findings appear in the workflow log. Remove this once GHAS is on.
       - uses: github/codeql-action/analyze@v3
+        continue-on-error: true
         with:
           category: "/language:python"
