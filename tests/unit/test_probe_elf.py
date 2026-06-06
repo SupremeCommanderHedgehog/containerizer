@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from containerizer.probe.elf import probe_elf
+from containerizer.probe.elf import _resolve_arch, probe_elf
 
 
 @pytest.fixture
@@ -33,3 +33,20 @@ def test_probe_elf_glibc_min_parseable(elf_path: Path) -> None:
     major, minor = result.glibc_min.split(".")
     assert int(major) >= 2
     assert int(minor) >= 0
+
+
+@pytest.mark.parametrize(
+    ("e_machine", "elfclass", "expected"),
+    [
+        ("EM_X86_64", 64, "x86_64"),
+        ("EM_AARCH64", 64, "aarch64"),
+        ("EM_386", 32, "i386"),
+        ("EM_PPC64", 64, "ppc64"),
+        ("EM_PPC", 32, "ppc"),
+        ("EM_RISCV", 64, "riscv64"),
+        ("EM_RISCV", 32, "riscv32"),
+        ("EM_FOOBAR", 64, "EM_FOOBAR"),
+    ],
+)
+def test_resolve_arch(e_machine: str, elfclass: int, expected: str) -> None:
+    assert _resolve_arch(e_machine, elfclass) == expected
