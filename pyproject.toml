@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "containerizer"
+version = "0.0.0"
+description = "Trace-and-learn containerizer that turns Linux installers into hardened Podman containers."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "SupremeCommanderHedgehog" }]
+dependencies = [
+    "click>=8.1,<9",
+    "pydantic>=2.5,<3",
+    "pyelftools>=0.30",
+]
+
+[project.optional-dependencies]
+dev = [
+    "ruff>=0.4",
+    "mypy>=1.9",
+    "pytest>=8",
+    "pytest-cov>=5",
+]
+
+[project.scripts]
+containerizer = "containerizer.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/containerizer"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "SIM", "RUF"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["B011"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+mypy_path = "src"
+explicit_package_bases = true
+namespace_packages = true
+
+[[tool.mypy.overrides]]
+module = ["elftools.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
