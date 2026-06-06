@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.2.1](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.2.0...v0.2.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **probe:** distinguish riscv32 vs riscv64 in arch mapping ([#17](https://github.com/SupremeCommanderHedgehog/containerizer/issues/17)) ([3ae07ea](https://github.com/SupremeCommanderHedgehog/containerizer/commit/3ae07eaf5bc7bf1b022309ddedce393f8fa89b44)), closes [#8](https://github.com/SupremeCommanderHedgehog/containerizer/issues/8)
+
+
+### Tests
+
+* **probe:** cover non-ELF detect_kind paths ([#16](https://github.com/SupremeCommanderHedgehog/containerizer/issues/16)) ([182b746](https://github.com/SupremeCommanderHedgehog/containerizer/commit/182b746973254df81c44eafb09696a556ab73cf1)), closes [#7](https://github.com/SupremeCommanderHedgehog/containerizer/issues/7)
+
+
+### Continuous Integration
+
+* wire pytest-cov with 90% gate ([#19](https://github.com/SupremeCommanderHedgehog/containerizer/issues/19)) ([92442e8](https://github.com/SupremeCommanderHedgehog/containerizer/commit/92442e8eb68ad218a9a6b87116bf69ccf947e00f)), closes [#9](https://github.com/SupremeCommanderHedgehog/containerizer/issues/9)
+
 ## [0.2.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.1.0...v0.2.0) (2026-06-06)
 
 
