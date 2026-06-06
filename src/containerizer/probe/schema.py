@@ -39,7 +39,7 @@ class BaseImageSuggestion(BaseModel):
 
 
 class ProbeResult(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     schema_version: int = 1
     kind: InstallerKind

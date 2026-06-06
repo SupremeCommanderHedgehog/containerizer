@@ -46,8 +46,8 @@ def test_base_image_suggestion_round_trips_json() -> None:
     assert BaseImageSuggestion.model_validate_json(payload) == sug
 
 
-def test_probe_result_serialises_elf_kind() -> None:
-    result = ProbeResult(
+def _probe_result() -> ProbeResult:
+    return ProbeResult(
         kind=InstallerKind.elf,
         arch="x86_64",
         elf=ElfProbe(
@@ -61,8 +61,17 @@ def test_probe_result_serialises_elf_kind() -> None:
         ),
         base_image=BaseImageSuggestion(image="ubuntu:24.04", reasons=["glibc 2.35"]),
     )
-    payload = json.loads(result.model_dump_json())
+
+
+def test_probe_result_serialises_elf_kind() -> None:
+    payload = json.loads(_probe_result().model_dump_json())
     assert payload["kind"] == "elf"
     assert payload["elf"]["glibc_min"] == "2.35"
     assert payload["base_image"]["image"] == "ubuntu:24.04"
     assert payload["schema_version"] == 1
+
+
+def test_probe_result_is_frozen() -> None:
+    result = _probe_result()
+    with pytest.raises(ValidationError):
+        result.arch = "aarch64"
