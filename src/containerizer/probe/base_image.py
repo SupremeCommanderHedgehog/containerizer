@@ -18,19 +18,17 @@ def suggest_base_image(elf: ElfProbe) -> BaseImageSuggestion:
 
 def _pick_for_glibc(glibc_min: str | None, reasons: list[str]) -> str:
     if glibc_min is None:
-        reasons.append("no glibc requirement detected; picked ubuntu:24.04 as default")
+        reasons.append("no glibc requirement detected; picked ubuntu:24.04")
         return "ubuntu:24.04"
     try:
         major_s, minor_s = glibc_min.split(".", 1)
         major = int(major_s)
         minor = int(minor_s)
     except (ValueError, AttributeError):
-        reasons.append(
-            f"could not parse glibc version '{glibc_min}'; picked ubuntu:24.04 as default"
-        )
+        reasons.append(f"could not parse glibc version '{glibc_min}'; picked ubuntu:24.04")
         return "ubuntu:24.04"
-    if (major, minor) >= (2, 35):
-        reasons.append(f"glibc {glibc_min} requires Ubuntu 22.04+; picked 24.04 LTS")
+    if (major, minor) > (2, 35):
+        reasons.append(f"glibc {glibc_min} requires Ubuntu 24.04 LTS or newer")
         return "ubuntu:24.04"
     if (major, minor) >= (2, 31):
         reasons.append(f"glibc {glibc_min} fits Ubuntu 22.04 LTS")
