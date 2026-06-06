@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.1.0...v0.2.0) (2026-06-06)
+
+
+### Features
+
+* **probe:** make ProbeResult frozen for symmetry with sibling models ([#13](https://github.com/SupremeCommanderHedgehog/containerizer/issues/13)) ([2010970](https://github.com/SupremeCommanderHedgehog/containerizer/commit/20109704f3d82c5170a2cee4834e0522f65d729f)), closes [#4](https://github.com/SupremeCommanderHedgehog/containerizer/issues/4)
+
+
+### Bug Fixes
+
+* **probe:** route glibc 2.35 to ubuntu:22.04, not 24.04 ([#11](https://github.com/SupremeCommanderHedgehog/containerizer/issues/11)) ([f9d70c2](https://github.com/SupremeCommanderHedgehog/containerizer/commit/f9d70c2bf3c5f0c23b321eda0284a0bd3ed9fe9f)), closes [#3](https://github.com/SupremeCommanderHedgehog/containerizer/issues/3)
+
 ## 0.1.0 (2026-06-06)
 
 
