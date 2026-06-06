@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.1](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.2.0...v0.2.1) (2026-06-06)
+
+
+### Bug Fixes
+
+* **probe:** distinguish riscv32 vs riscv64 in arch mapping ([#17](https://github.com/SupremeCommanderHedgehog/containerizer/issues/17)) ([3ae07ea](https://github.com/SupremeCommanderHedgehog/containerizer/commit/3ae07eaf5bc7bf1b022309ddedce393f8fa89b44)), closes [#8](https://github.com/SupremeCommanderHedgehog/containerizer/issues/8)
+
 ## [0.2.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.1.0...v0.2.0) (2026-06-06)
 
 
