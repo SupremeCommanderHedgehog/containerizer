@@ -1,0 +1,50 @@
+name: Add support for software X
+description: Request that containerizer be tested or extended to handle a particular piece of software.
+title: "support: "
+labels: ["software-support"]
+body:
+  - type: input
+    id: software-name
+    attributes:
+      label: Software name
+      description: e.g., "UniFi OS Server", "Plex Media Server".
+    validations:
+      required: true
+  - type: input
+    id: installer-source
+    attributes:
+      label: Installer source
+      description: URL or location where the installer can be obtained (if non-confidential).
+  - type: dropdown
+    id: installer-kind
+    attributes:
+      label: Installer kind
+      options:
+        - ELF binary
+        - .deb package
+        - .rpm package
+        - AppImage
+        - Shell script
+        - Tarball
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: what-it-does
+    attributes:
+      label: What the software does
+      description: One paragraph for context.
+    validations:
+      required: true
+  - type: textarea
+    id: smoke-test
+    attributes:
+      label: How to exercise it during the smoke trace
+      description: What does "working" look like? URLs to hit, ports to probe, commands to run.
+    validations:
+      required: true
+  - type: textarea
+    id: known-issues
+    attributes:
+      label: Known issues or special requirements
+      description: systemd-required? Hardware access? Outbound dependencies?

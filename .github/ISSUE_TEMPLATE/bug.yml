@@ -1,0 +1,62 @@
+name: Bug report
+description: Something containerizer did wrong.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One-paragraph description of the problem.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction
+      description: Exact commands and inputs that trigger the bug.
+      placeholder: |
+        $ containerizer build ./installer.bin --name foo
+        ...
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behaviour
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behaviour
+    validations:
+      required: true
+  - type: input
+    id: containerizer-version
+    attributes:
+      label: containerizer version
+      description: Output of `containerizer --version`.
+    validations:
+      required: true
+  - type: input
+    id: podman-version
+    attributes:
+      label: Podman version
+      description: Output of `podman --version`.
+  - type: input
+    id: kernel
+    attributes:
+      label: Podman machine kernel
+      description: Output of `podman machine ssh uname -a` (or equivalent for non-Windows).
+  - type: input
+    id: installer-kind
+    attributes:
+      label: Installer kind
+      description: ELF, .deb, .rpm, AppImage, shell, tarball, other.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      render: shell
