@@ -33,6 +33,8 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     assert "/sys/kernel/debug:/sys/kernel/debug" in argv
     assert "/sys/kernel/tracing:/sys/kernel/tracing" in argv
     assert "/sys/kernel/btf:/sys/kernel/btf" in argv
+    assert "/lib/modules:/lib/modules:ro" in argv
+    assert "/usr/src:/usr/src:ro" in argv
     assert f"{installer.resolve()}:/installer:ro" in argv
     assert f"{output.resolve()}:/work/trace" in argv
     assert argv[-2] == "localhost/containerizer-runner:sha-abc12345"

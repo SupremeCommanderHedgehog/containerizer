@@ -34,7 +34,11 @@ class TraceRunner:
           running kernel's BTF (`vmlinux`) so it works without bundled
           kernel headers.
 
-        Mounting all three covers bpftrace (legacy + modern) and bcc.
+        /lib/modules and /usr/src are also bound read-only so bcc and
+        bpftrace can find the running kernel's headers when CO-RE is
+        not enough (e.g., for bpftrace scripts that #include <linux/in.h>).
+        The host needs `linux-headers-$(uname -r)` installed for these
+        to be useful.
         """
         return [
             "podman",
@@ -49,6 +53,10 @@ class TraceRunner:
             "/sys/kernel/tracing:/sys/kernel/tracing",
             "-v",
             "/sys/kernel/btf:/sys/kernel/btf",
+            "-v",
+            "/lib/modules:/lib/modules:ro",
+            "-v",
+            "/usr/src:/usr/src:ro",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
