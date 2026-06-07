@@ -55,8 +55,8 @@ collector_pids=()
 launch_bt open     /opt/containerizer/collectors/open.bt
 launch_bt bind     /opt/containerizer/collectors/bind.bt
 launch_bt syscalls /opt/containerizer/collectors/syscalls.bt
-launch_py connect  /opt/containerizer/collectors/tcpconnect.py
-launch_py accept   /opt/containerizer/collectors/tcpaccept.py
+launch_bt connect  /opt/containerizer/collectors/tcpconnect.bt
+launch_bt accept   /opt/containerizer/collectors/tcpaccept.bt
 launch_py capable  /opt/containerizer/collectors/capable.py
 
 # Give collectors time to attach probes before we exec the installer.

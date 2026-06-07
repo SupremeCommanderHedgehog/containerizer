@@ -1,0 +1,44 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcpaccept.bt — emit JSONL for every inbound TCP accept().
+ *
+ * Schema (one JSON object per line):
+ *     {ts_ns, pid, comm, family, laddr, lport, raddr, rport}
+ *
+ * Replaces the bcc-based tcpaccept.py (issue #77 — same kernel-header
+ * compile failure as tcpconnect.py). See tcpconnect.bt for the root-
+ * cause notes.
+ *
+ * Probe:
+ *   kretprobe:inet_csk_accept — fires when accept(2) returns. retval is
+ *   the new struct sock *; if it points at a non-inet family we just
+ *   silently skip the emit (no probe predicate, matching upstream
+ *   tools/tcpaccept.bt; a null retval reads back as $family == 0 which
+ *   matches neither branch and is dropped naturally).
+ *
+ * linux/in.h is included for the AF_INET / AF_INET6 numeric defines.
+ * See tcpconnect.bt for the include-vs-BTF rationale.
+ */
+
+#include <linux/in.h>
+#include <linux/in6.h>
+
+kretprobe:inet_csk_accept
+{
+    $sk = (struct sock *)retval;
+    $family = $sk->__sk_common.skc_family;
+    $lport = $sk->__sk_common.skc_num;
+    $rport = bswap($sk->__sk_common.skc_dport);
+
+    if ($family == AF_INET) {
+        printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"laddr\":\"%s\",\"lport\":%d,\"raddr\":\"%s\",\"rport\":%d}\n",
+            nsecs, pid, comm, $family,
+            ntop(AF_INET, $sk->__sk_common.skc_rcv_saddr), $lport,
+            ntop(AF_INET, $sk->__sk_common.skc_daddr), $rport);
+    } else if ($family == AF_INET6) {
+        printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"laddr\":\"%s\",\"lport\":%d,\"raddr\":\"%s\",\"rport\":%d}\n",
+            nsecs, pid, comm, $family,
+            ntop(AF_INET6, $sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8), $lport,
+            ntop(AF_INET6, $sk->__sk_common.skc_v6_daddr.in6_u.u6_addr8), $rport);
+    }
+}
