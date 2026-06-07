@@ -10,8 +10,6 @@
  * its own map keyed on pid.
  */
 
-BEGIN { printf("[\n"); }
-
 tracepoint:raw_syscalls:sys_enter
 {
     $key = (((uint64)pid) << 16) | (args->id & 0xffff);
