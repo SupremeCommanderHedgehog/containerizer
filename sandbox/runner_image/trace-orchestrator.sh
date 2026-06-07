@@ -129,8 +129,8 @@ for name in "${!fallbacks[@]}"; do
     collector_pids+=("$!")
 done
 
-wait "$installer_pid"
-install_rc="$?"
+install_rc=0
+wait "$installer_pid" || install_rc=$?
 echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
 if (( install_rc != 0 )); then
