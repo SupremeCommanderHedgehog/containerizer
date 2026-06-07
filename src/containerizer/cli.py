@@ -9,6 +9,7 @@ import click
 from containerizer import __version__
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
+from containerizer.trace.cli import trace_cmd
 
 
 @click.group()
@@ -40,6 +41,9 @@ def probe_cmd(installer: Path, output: Path | None) -> None:
         click.echo(payload)
     else:
         output.write_text(payload + "\n", encoding="utf-8")
+
+
+main.add_command(trace_cmd)
 
 
 if __name__ == "__main__":
