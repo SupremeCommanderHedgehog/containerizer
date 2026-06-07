@@ -73,18 +73,7 @@ jobs:
         with:
           path: /tmp/runner-image.tar
           key: runner-image-${{ hashFiles('sandbox/runner_image/**') }}
-      - name: Diagnose container view of tracing mounts (sudo podman)
-        run: |
-          echo "## inside the runner container under sudo podman ##"
-          sudo podman load -i /tmp/runner-image.tar 2>&1 | head -2 || true
-          sudo podman run --rm --privileged --pid=host \
-            -v /sys/kernel/debug:/sys/kernel/debug \
-            -v /sys/kernel/tracing:/sys/kernel/tracing \
-            --entrypoint /bin/sh \
-            "${{ steps.tag.outputs.tag }}" \
-            -c 'echo "[container] /sys/kernel/debug count:"; ls /sys/kernel/debug/ 2>&1 | wc -l; \
-                echo "[container] /sys/kernel/tracing count:"; ls /sys/kernel/tracing/ 2>&1 | wc -l; \
-                echo "[container] bpftrace -l raw_syscalls (first 3):"; \
-                bpftrace -l "tracepoint:raw_syscalls:*" 2>&1 | head -3' || true
+      - name: Pre-load runner image into rootful podman store
+        run: sudo podman load -i /tmp/runner-image.tar
       - name: Run trace integration test
         run: sudo -E env "PATH=$PATH" pytest -m integration -v --no-cov
