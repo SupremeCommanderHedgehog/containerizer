@@ -30,6 +30,7 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     assert "--pid=host" in argv
     assert "-v" in argv
     assert "/sys/kernel/debug:/sys/kernel/debug" in argv
+    assert "/sys/kernel/tracing:/sys/kernel/tracing" in argv
     assert f"{installer.resolve()}:/installer:ro" in argv
     assert f"{output.resolve()}:/work/trace" in argv
     assert argv[-2] == "localhost/containerizer-runner:sha-abc12345"

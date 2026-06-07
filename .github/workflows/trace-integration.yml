@@ -73,5 +73,29 @@ jobs:
         with:
           path: /tmp/runner-image.tar
           key: runner-image-${{ hashFiles('sandbox/runner_image/**') }}
+      - name: Diagnose host kernel tracing setup
+        run: |
+          echo "## host /sys/kernel/debug ##"
+          sudo ls /sys/kernel/debug/ 2>&1 || echo "(unreadable)"
+          echo
+          echo "## host /sys/kernel/tracing ##"
+          sudo ls /sys/kernel/tracing/ 2>&1 || echo "(unreadable)"
+          echo
+          echo "## host tracing/events/raw_syscalls/ ##"
+          sudo ls /sys/kernel/debug/tracing/events/raw_syscalls/ 2>&1 || \
+            sudo ls /sys/kernel/tracing/events/raw_syscalls/ 2>&1 || echo "(not found)"
+          echo
+          echo "## inside the runner container with the new mounts ##"
+          podman run --rm --privileged --pid=host \
+            -v /sys/kernel/debug:/sys/kernel/debug \
+            -v /sys/kernel/tracing:/sys/kernel/tracing \
+            --entrypoint /bin/sh \
+            "${{ steps.tag.outputs.tag }}" \
+            -c 'echo "[container] /sys/kernel/debug:"; ls /sys/kernel/debug/ 2>&1 | head -20; \
+                echo "[container] /sys/kernel/tracing:"; ls /sys/kernel/tracing/ 2>&1 | head -20; \
+                echo "[container] bpftrace -l tracepoint:raw_syscalls:* (first 5):"; \
+                bpftrace -l "tracepoint:raw_syscalls:*" 2>&1 | head -5; \
+                echo "[container] bpftrace -l tracepoint:syscalls:sys_enter_openat:"; \
+                bpftrace -l "tracepoint:syscalls:sys_enter_openat" 2>&1' || true
       - name: Run trace integration test
         run: pytest -m integration -v --no-cov
