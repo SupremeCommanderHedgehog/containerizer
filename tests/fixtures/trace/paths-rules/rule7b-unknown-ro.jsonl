@@ -1,0 +1,2 @@
+# expected: [{"path":"/srv/weird-ro","ops":["read"],"class":"unknown_ro","by":["app"]}]
+{"ts_ns":1,"pid":1,"comm":"app","path":"/srv/weird-ro","flags":0,"mode":0,"ret":3}
