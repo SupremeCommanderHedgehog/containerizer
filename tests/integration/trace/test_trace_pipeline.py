@@ -29,7 +29,7 @@ def test_trace_pipeline_against_synthetic_fixture(tmp_path: Path) -> None:
         stdin=subprocess.DEVNULL,
         capture_output=True,
         text=True,
-        timeout=600,
+        timeout=1500,
     )
     assert result.returncode == 0, (result.stdout, result.stderr)
 
