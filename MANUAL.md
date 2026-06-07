@@ -16,7 +16,7 @@ The trace/learn portion (running an installer in a sandbox and recording its beh
 
 - **Python 3.11 or 3.12** on PATH. Confirm with `python --version`.
 - **git** on PATH.
-- **Optional, only for scenario 2:** Docker Desktop with WSL2 backend, so you can pull an ELF binary out of a Linux image.
+- **Optional, only for scenario 2:** Podman with a running machine (`podman machine start`), so you can pull an ELF binary out of a Linux image. The repo's own README lists Podman as the supported container runtime.
 
 ## 1. Clone and install
 
@@ -91,10 +91,10 @@ The exact `glibc_min` depends on the binary the fixture was carved from, but `ba
 
 ## Scenario 2 — probe a fresh ELF from a real image
 
-To exercise the probe against something more interesting, pull a binary straight out of a public image:
+To exercise the probe against something more interesting, pull a binary straight out of a public image. With the Podman machine running:
 
 ```pwsh
-docker run --rm debian:bookworm-slim cat /usr/bin/curl > C:\Temp\curl-bookworm.bin
+podman run --rm debian:bookworm-slim cat /usr/bin/curl > C:\Temp\curl-bookworm.bin
 containerizer probe C:\Temp\curl-bookworm.bin
 ```
 
@@ -197,7 +197,9 @@ The model is `frozen=True` end-to-end (`pydantic` v2), so any downstream code th
 
 - **"file not found" on the fixture path** — make sure you're at the repo root. The fixture lives at `tests/fixtures/probe/elf-dynamic-x86_64`.
 - **`containerizer: command not found`** — your venv isn't activated; either run `.\.venv\Scripts\Activate.ps1` or invoke explicitly with `.\.venv\Scripts\python.exe -m containerizer ...`.
-- **Docker `cat`-out-of-image trick produces an empty file** — your shell ate the redirect. Use PowerShell as shown, not `cmd.exe`.
+- **`podman` not on PATH** — Podman Desktop installs to `C:\Users\<you>\AppData\Local\Programs\Podman\`; either add that to PATH or use the full path. Confirm with `Get-Command podman`.
+- **`podman run` complains "Cannot connect to Podman"** — the Podman machine isn't running. `podman machine start` once per boot, then retry.
+- **The `cat`-out-of-image trick produces an empty file** — your shell ate the redirect. Use PowerShell as shown, not `cmd.exe`.
 - **`UnsupportedInstallerKind` for what looks like an ELF** — confirm the file actually starts with `\x7fELF`. AppImages start with ELF *and* have `AI\x02` near the head; they're detected as `appimage` and currently rejected.
 
 ## What's *not* in this manual
