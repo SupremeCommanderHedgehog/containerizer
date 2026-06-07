@@ -20,7 +20,15 @@ class TraceRunner:
     output_dir: Path
 
     def argv(self) -> list[str]:
-        """Pure: returns the podman command without executing it."""
+        """Pure: returns the podman command without executing it.
+
+        /sys/kernel/debug is bind-mounted so bpftrace inside the container
+        can read tracefs (`/sys/kernel/debug/tracing/events/...`) and attach
+        to syscall tracepoints. Without it, bpftrace fails with
+        "tracepoint not found" even under --privileged, because the
+        container's sysfs is namespaced and does not include the host's
+        tracing dir.
+        """
         return [
             "podman",
             "run",
@@ -28,6 +36,8 @@ class TraceRunner:
             "-it",
             "--privileged",
             "--pid=host",
+            "-v",
+            "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
