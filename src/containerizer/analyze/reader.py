@@ -1,0 +1,120 @@
+"""Read a trace directory produced by `containerizer trace` into typed events."""
+
+from __future__ import annotations
+
+import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Literal
+
+COLLECTORS: tuple[str, ...] = (
+    "open",
+    "bind",
+    "syscalls",
+    "connect",
+    "accept",
+    "capable",
+)
+
+
+class MissingMarker(Exception):
+    """Neither COMPLETE nor PARTIAL marker present — trace is corrupt or in-flight."""
+
+
+class MissingRequiredCollector(Exception):
+    """A collector file is missing AND not listed in FALLBACKS.json."""
+
+
+@dataclass
+class TraceBundle:
+    marker: Literal["COMPLETE", "PARTIAL"]
+    phase_marker_ns: int | None
+    fallbacks: dict[str, dict[str, str]]
+    # events[collector_name] = list of parsed JSON dicts (one per .jsonl line)
+    events: dict[str, list[dict[str, object]]]
+    warnings: list[str] = field(default_factory=list)
+
+
+def read_trace_dir(trace_dir: Path) -> TraceBundle:
+    """Parse a trace directory. See spec §5.1 (reader.py) for behavior."""
+    if (trace_dir / "COMPLETE").exists():
+        marker: Literal["COMPLETE", "PARTIAL"] = "COMPLETE"
+    elif (trace_dir / "PARTIAL").exists():
+        marker = "PARTIAL"
+    else:
+        raise MissingMarker(
+            f"no COMPLETE or PARTIAL marker in {trace_dir}; trace is corrupt or in-flight"
+        )
+
+    phase_marker_ns = _read_phase_marker(trace_dir / "PHASE_MARKER")
+    fallbacks = _read_fallbacks(trace_dir / "FALLBACKS.json")
+
+    warnings: list[str] = []
+    events: dict[str, list[dict[str, object]]] = {}
+    empty_present: list[str] = []
+    for name in COLLECTORS:
+        jsonl_path = trace_dir / f"{name}.jsonl"
+        if not jsonl_path.exists():
+            if name in fallbacks:
+                warnings.append(
+                    f"collector {name}: missing .jsonl; fallback recorded "
+                    f"({fallbacks[name].get('reason', 'unknown')})"
+                )
+                events[name] = []
+                continue
+            raise MissingRequiredCollector(
+                f"{jsonl_path} missing and {name} is not in FALLBACKS.json"
+            )
+
+        parsed = _parse_jsonl(jsonl_path)
+        events[name] = parsed
+        if not parsed and name not in fallbacks:
+            empty_present.append(name)
+
+    # Only warn about present-but-empty collectors when the trace recorded
+    # *some* activity. An entirely empty trace is the "container did nothing
+    # observable" case (e.g., a bare `true`) — legitimate, not noise-worthy.
+    if any(events[name] for name in COLLECTORS):
+        for name in empty_present:
+            warnings.append(f"collector {name}: .jsonl present but empty")
+
+    return TraceBundle(
+        marker=marker,
+        phase_marker_ns=phase_marker_ns,
+        fallbacks=fallbacks,
+        events=events,
+        warnings=warnings,
+    )
+
+
+def _read_phase_marker(path: Path) -> int | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8").strip()
+    # Orchestrator writes "monotonic_ns: <int>\n"
+    prefix = "monotonic_ns:"
+    if not text.startswith(prefix):
+        return None
+    try:
+        return int(text[len(prefix) :].strip())
+    except ValueError:
+        return None
+
+
+def _read_fallbacks(path: Path) -> dict[str, dict[str, str]]:
+    if not path.exists() or path.stat().st_size == 0:
+        return {}
+    data: dict[str, dict[str, str]] = json.loads(path.read_text(encoding="utf-8"))
+    return data
+
+
+def _parse_jsonl(path: Path) -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        # bpftrace dumps non-cleared map contents at script exit
+        # (e.g., "@args[3429]: 140732759619824"); skip anything that
+        # doesn't look like a JSON object.
+        if not line.startswith("{"):
+            continue
+        out.append(json.loads(line))
+    return out
