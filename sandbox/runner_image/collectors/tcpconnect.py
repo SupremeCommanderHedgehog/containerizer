@@ -81,12 +81,8 @@ def main() -> None:
             "family": int(ev.family),
         }
         if ev.family == socket.AF_INET:
-            record["saddr"] = socket.inet_ntop(
-                socket.AF_INET, struct.pack("I", ev.saddr)
-            )
-            record["daddr"] = socket.inet_ntop(
-                socket.AF_INET, struct.pack("I", ev.daddr)
-            )
+            record["saddr"] = socket.inet_ntop(socket.AF_INET, struct.pack("I", ev.saddr))
+            record["daddr"] = socket.inet_ntop(socket.AF_INET, struct.pack("I", ev.daddr))
         elif ev.family == socket.AF_INET6:
             record["saddr"] = socket.inet_ntop(
                 socket.AF_INET6, struct.pack("Q" * 2, ev.saddr6 & ((1 << 64) - 1), ev.saddr6 >> 64)
