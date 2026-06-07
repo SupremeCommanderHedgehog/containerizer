@@ -101,6 +101,12 @@ jobs:
           echo
           echo "--- accept.jsonl (xxd) ---"
           sudo xxd "$tdir/accept.jsonl" 2>/dev/null | head -5
+          echo "--- inet_csk_accept in kallsyms ---"
+          sudo grep -E 'inet_csk_accept|inet_accept|tcp_accept' /proc/kallsyms 2>/dev/null | head -20
+          echo "--- available bpftrace probes for inet_csk_accept ---"
+          sudo bpftrace -l 'kprobe:inet_csk_accept' 'kretprobe:inet_csk_accept' 2>&1 | head -10
+          echo "--- syscalls.jsonl: accept syscalls during run ---"
+          sudo grep -E '"syscall_id":(43|288)' "$tdir/syscalls.jsonl" 2>/dev/null | head -5
       - name: Dump trace dir on failure
         if: failure()
         run: |
