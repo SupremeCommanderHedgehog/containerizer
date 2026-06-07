@@ -33,7 +33,7 @@ mkdir -p "$TRACE_DIR"
 launch_bt() {
     local name="$1"
     local script="$2"
-    bpftrace -B none -f json "$script" \
+    bpftrace -B none "$script" \
         > "$TRACE_DIR/$name.jsonl" 2> "$TRACE_DIR/$name.err" &
     collector_pids+=("$!")
     echo "trace-orchestrator: launched $name (pid $!)" >&2
