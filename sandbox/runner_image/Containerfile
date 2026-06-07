@@ -1,0 +1,27 @@
+# syntax=docker/dockerfile:1
+#
+# Containerizer trace runner image.
+#
+# Fedora 41 was picked over Ubuntu / Debian because:
+#   * bcc-tools and bpftrace are first-class packages and track upstream
+#   * stock Fedora kernel exposes BTF for bcc and bpftrace probe attach
+#   * systemd-as-PID-1 inside the container is the supported Fedora pattern
+#
+# The image is intentionally fat (~600 MB). It is built once per sandbox/
+# directory content hash on the user's host (see src/containerizer/trace/image.py)
+# and reused across every `containerizer trace` invocation.
+FROM fedora:41
+
+RUN dnf install -y --setopt=install_weak_deps=False \
+      systemd dbus \
+      bcc-tools bpftrace strace audit-libs audit \
+      jq python3 \
+    && dnf clean all
+
+# Project-specific tooling lives under /opt/containerizer/ so /usr stays clean.
+RUN mkdir -p /opt/containerizer/collectors /work/trace
+COPY trace-orchestrator.sh /opt/containerizer/trace-orchestrator.sh
+COPY collectors/           /opt/containerizer/collectors/
+RUN chmod +x /opt/containerizer/trace-orchestrator.sh
+
+ENTRYPOINT ["/opt/containerizer/trace-orchestrator.sh"]
