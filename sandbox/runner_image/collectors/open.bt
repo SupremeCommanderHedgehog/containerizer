@@ -11,8 +11,6 @@
  *     distinguish "tried to read" from "actually read".
  */
 
-BEGIN { printf("[\n"); }
-
 tracepoint:syscalls:sys_enter_openat
 {
     @args[tid] = (uint64)args->filename;

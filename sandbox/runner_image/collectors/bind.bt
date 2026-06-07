@@ -13,8 +13,6 @@
 #include <linux/in6.h>
 #include <linux/un.h>
 
-BEGIN { printf("[\n"); }
-
 tracepoint:syscalls:sys_enter_socket
 {
     @sock_type[tid] = args->type & 0xf;  // SOCK_STREAM=1, SOCK_DGRAM=2
