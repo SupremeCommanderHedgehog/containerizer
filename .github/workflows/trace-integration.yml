@@ -81,12 +81,16 @@ jobs:
         if: failure()
         run: |
           shopt -s nullglob
-          for d in /tmp/pytest-of-root/pytest-*/test_trace_pipeline_*/trace; do
-            echo "=== $d ==="
-            sudo ls -la "$d"
-            for f in "$d"/*.err "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status; do
-              [ -e "$f" ] || continue
-              echo "--- $(basename "$f") ---"
-              sudo cat "$f" 2>&1 | head -50
-            done
+          d=/tmp/trace-debug-dump
+          if [ ! -d "$d" ]; then
+            echo "(no $d — test did not reach the dump path)"
+            exit 0
+          fi
+          echo "=== $d ==="
+          sudo ls -la "$d"
+          for f in "$d"/*.err "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl; do
+            [ -e "$f" ] || continue
+            echo "--- $(basename "$f") ---"
+            sudo head -c 4000 "$f"
+            echo
           done
