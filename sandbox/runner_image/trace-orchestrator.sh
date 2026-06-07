@@ -28,9 +28,36 @@ fi
 
 mkdir -p "$TRACE_DIR"
 
-# Collector wiring lands in task 10. For now collector_pids is empty so the
-# finalize path runs cleanly even without any collectors attached.
+# Launch each collector backgrounded. Each writes its own JSONL to TRACE_DIR
+# and any errors to TRACE_DIR/<name>.err.
+launch_bt() {
+    local name="$1"
+    local script="$2"
+    bpftrace -B none "$script" \
+        > "$TRACE_DIR/$name.jsonl" 2> "$TRACE_DIR/$name.err" &
+    collector_pids+=("$!")
+    echo "trace-orchestrator: launched $name (pid $!)" >&2
+}
+
+launch_py() {
+    local name="$1"
+    local script="$2"
+    python3 -u "$script" \
+        > "$TRACE_DIR/$name.jsonl" 2> "$TRACE_DIR/$name.err" &
+    collector_pids+=("$!")
+    echo "trace-orchestrator: launched $name (pid $!)" >&2
+}
+
 collector_pids=()
+launch_bt open     /opt/containerizer/collectors/open.bt
+launch_bt bind     /opt/containerizer/collectors/bind.bt
+launch_bt syscalls /opt/containerizer/collectors/syscalls.bt
+launch_py connect  /opt/containerizer/collectors/tcpconnect.py
+launch_py accept   /opt/containerizer/collectors/tcpaccept.py
+launch_py capable  /opt/containerizer/collectors/capable.py
+
+# Give collectors ~2s to attach probes before we exec the installer.
+sleep 2
 
 finalize_marker() {
     local marker="$1"  # COMPLETE or PARTIAL
