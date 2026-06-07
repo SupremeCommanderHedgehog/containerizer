@@ -78,35 +78,6 @@ jobs:
         run: sudo podman load -i /tmp/runner-image.tar
       - name: Run trace integration test
         run: sudo -E env "PATH=$PATH" pytest -m integration -v --no-cov
-      - name: Dump trace dir contents (always — verify #77)
-        if: always()
-        run: |
-          set +e
-          tdir=$(sudo find /tmp/pytest-of-root -maxdepth 4 -name 'trace' -type d 2>/dev/null | head -1)
-          if [ -z "$tdir" ]; then
-            echo "(no trace dir found anywhere)"
-            exit 0
-          fi
-          echo "=== $tdir ==="
-          sudo ls -la "$tdir"
-          echo "--- FALLBACKS.json ---"
-          sudo cat "$tdir/FALLBACKS.json" 2>/dev/null
-          echo
-          echo "--- connect.err (full) ---"
-          sudo cat "$tdir/connect.err" 2>/dev/null
-          echo "--- accept.err (full) ---"
-          sudo cat "$tdir/accept.err" 2>/dev/null
-          echo "--- connect.jsonl (head) ---"
-          sudo head -c 2000 "$tdir/connect.jsonl" 2>/dev/null
-          echo
-          echo "--- accept.jsonl (xxd) ---"
-          sudo xxd "$tdir/accept.jsonl" 2>/dev/null | head -5
-          echo "--- inet_csk_accept in kallsyms ---"
-          sudo grep -E 'inet_csk_accept|inet_accept|tcp_accept' /proc/kallsyms 2>/dev/null | head -20
-          echo "--- available bpftrace probes for inet_csk_accept ---"
-          sudo bpftrace -l 'kprobe:inet_csk_accept' 'kretprobe:inet_csk_accept' 2>&1 | head -10
-          echo "--- syscalls.jsonl: accept syscalls during run ---"
-          sudo grep -E '"syscall_id":(43|288)' "$tdir/syscalls.jsonl" 2>/dev/null | head -5
       - name: Dump trace dir on failure
         if: failure()
         run: |
