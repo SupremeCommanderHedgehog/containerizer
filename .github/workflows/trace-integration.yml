@@ -78,6 +78,25 @@ jobs:
         run: sudo podman load -i /tmp/runner-image.tar
       - name: Run trace integration test
         run: sudo -E env "PATH=$PATH" pytest -m integration -v --no-cov
+      - name: Dump trace dir contents (always — verify #77)
+        if: always()
+        run: |
+          d=/tmp/trace-debug-dump
+          if [ ! -d "$d" ]; then
+            echo "(test cleared $d before this step; checking pytest tmp_path instead)"
+            sudo find /tmp/pytest-of-root -maxdepth 4 -name '*.jsonl' -exec ls -la {} \; 2>/dev/null | head -20
+            sudo find /tmp/pytest-of-root -maxdepth 4 -name 'FALLBACKS.json' -exec cat {} \; 2>/dev/null
+            exit 0
+          fi
+          echo "=== $d ==="
+          sudo ls -la "$d"
+          sudo cat "$d/FALLBACKS.json" || true
+          echo "--- connect.jsonl ---"
+          sudo head -c 4000 "$d/connect.jsonl" 2>/dev/null
+          echo
+          echo "--- accept.jsonl ---"
+          sudo head -c 4000 "$d/accept.jsonl" 2>/dev/null
+          echo
       - name: Dump trace dir on failure
         if: failure()
         run: |
