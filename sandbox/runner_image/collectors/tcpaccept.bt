@@ -23,12 +23,19 @@
 #include <linux/in.h>
 #include <linux/in6.h>
 
+BEGIN
+{
+    printf("{\"debug\":\"BEGIN: tcpaccept.bt loaded\"}\n");
+}
+
 kretprobe:inet_csk_accept
 {
     $sk = (struct sock *)retval;
     $family = $sk->__sk_common.skc_family;
     $lport = $sk->__sk_common.skc_num;
     $rport = bswap($sk->__sk_common.skc_dport);
+    printf("{\"debug\":\"probe fired\",\"retval\":%ld,\"family\":%d,\"lport\":%d}\n",
+        (int64)retval, $family, $lport);
 
     if ($family == AF_INET) {
         printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"laddr\":\"%s\",\"lport\":%d,\"raddr\":\"%s\",\"rport\":%d}\n",
