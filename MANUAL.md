@@ -94,11 +94,13 @@ The exact `glibc_min` depends on the binary the fixture was carved from, but `ba
 To exercise the probe against something more interesting, pull a binary straight out of a public image. With the Podman machine running:
 
 ```pwsh
-podman run --rm debian:bookworm-slim cat /usr/bin/dpkg > C:\Temp\dpkg-bookworm.bin
+podman run --rm -v C:\Temp:/out debian:bookworm-slim cp /usr/bin/dpkg /out/dpkg-bookworm.bin
 containerizer probe C:\Temp\dpkg-bookworm.bin
 ```
 
-`/usr/bin/dpkg` is Debian's own package manager and is guaranteed to be present in any Debian image. `needed_libs` should be long (libbz2, libc, liblzma, libmd, libselinux, libzstd, libz) and `glibc_min` should be `2.34`. The suggested base image should be `ubuntu:22.04` (glibc 2.31–2.35 routes there since v0.2.1).
+The bind-mount + `cp` form is deliberate. Don't try to "simplify" with a PowerShell redirect (`> C:\Temp\out.bin`) — see the pitfalls section below.
+
+`/usr/bin/dpkg` is Debian's own package manager and is guaranteed to be present in any Debian image. `needed_libs` is short — just `libmd.so.0`, `libselinux.so.1`, `libc.so.6` (dpkg loads compression libs like libbz2/liblzma/libzstd via dlopen, so they don't appear in DT_NEEDED). `glibc_min` should be `2.34` and the suggested base image should be `ubuntu:22.04` (glibc 2.31–2.35 routes there since v0.2.1).
 
 Other useful targets to try:
 
@@ -201,7 +203,7 @@ The model is `frozen=True` end-to-end (`pydantic` v2), so any downstream code th
 - **`containerizer: command not found`** — your venv isn't activated; either run `.\.venv\Scripts\Activate.ps1` or invoke explicitly with `.\.venv\Scripts\python.exe -m containerizer ...`.
 - **`podman` not on PATH** — Podman Desktop installs to `C:\Users\<you>\AppData\Local\Programs\Podman\`; either add that to PATH or use the full path. Confirm with `Get-Command podman`.
 - **`podman run` complains "Cannot connect to Podman"** — the Podman machine isn't running. `podman machine start` once per boot, then retry.
-- **The `cat`-out-of-image trick produces an empty file** — your shell ate the redirect. Use PowerShell as shown, not `cmd.exe`.
+- **PowerShell's `>` operator corrupts the captured binary** — `podman run ... cat /usr/bin/X > out.bin` looks reasonable but PowerShell routes `>` through `Out-File`, which treats stdout as text and re-encodes it as UTF-16 LE. The resulting file starts with the BOM (`ff fe`) and every original byte gets a null byte interleaved after it, so the probe sees `kind: 'unknown'` instead of ELF. That's why scenario 2 uses bind-mount + `cp` instead of a redirect. (If you do want a redirect, `cmd /c "podman run ... cat /usr/bin/X > out.bin"` works because `cmd.exe`'s redirect is byte-clean — but the bind-mount form is cleaner.)
 - **`UnsupportedInstallerKind` for what looks like an ELF** — confirm the file actually starts with `\x7fELF`. AppImages start with ELF *and* have `AI\x02` near the head; they're detected as `appimage` and currently rejected.
 
 ## What's *not* in this manual
