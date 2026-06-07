@@ -4,9 +4,14 @@
  * every bind(2) syscall. Captures IPv4, IPv6, and AF_UNIX in one stream.
  *
  * proto is "tcp" if the socket was SOCK_STREAM at bind, "udp" if SOCK_DGRAM,
- * "unix" if AF_UNIX, "?" otherwise. We approximate proto by storing the
- * type at socket-create time; tracking it perfectly would require kprobing
- * inet_bind, which has different signatures across kernels.
+ * "unix" if AF_UNIX, "?" otherwise.
+ *
+ * We track the socket type in a map keyed on (pid << 32 | fd) so it survives
+ * across syscalls. The map is populated at sys_exit_socket (when the returned
+ * fd becomes known), read at sys_enter_bind (via args->fd), and freed at
+ * sys_enter_close. Keying on tid would not work: sys_exit_socket always fires
+ * before the subsequent bind(), so a tid-keyed entry deleted at exit_socket
+ * would always be gone by the time bind reads it.
  */
 
 #include <linux/in.h>
@@ -15,12 +20,23 @@
 
 tracepoint:syscalls:sys_enter_socket
 {
-    @sock_type[tid] = args->type & 0xf;  // SOCK_STREAM=1, SOCK_DGRAM=2
+    @pending_type[tid] = args->type & 0xf;  // SOCK_STREAM=1, SOCK_DGRAM=2
 }
 
 tracepoint:syscalls:sys_exit_socket
+/ @pending_type[tid] /
 {
-    delete(@sock_type[tid]);
+    if (args->ret >= 0) {
+        $key = (((uint64)pid) << 32) | (uint32)args->ret;
+        @sock_type[$key] = @pending_type[tid];
+    }
+    delete(@pending_type[tid]);
+}
+
+tracepoint:syscalls:sys_enter_close
+{
+    $key = (((uint64)pid) << 32) | (uint32)args->fd;
+    delete(@sock_type[$key]);
 }
 
 tracepoint:syscalls:sys_enter_bind
@@ -43,9 +59,12 @@ tracepoint:syscalls:sys_enter_bind
         $addr_str = str($sun->sun_path);
     }
 
+    $key = (((uint64)pid) << 32) | (uint32)args->fd;
+    $stype = @sock_type[$key];
+
     $proto = "?";
-    if (@sock_type[tid] == 1) { $proto = "tcp"; }
-    else if (@sock_type[tid] == 2) { $proto = "udp"; }
+    if ($stype == 1) { $proto = "tcp"; }
+    else if ($stype == 2) { $proto = "udp"; }
     else if ($family == AF_UNIX) { $proto = "unix"; }
 
     printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
