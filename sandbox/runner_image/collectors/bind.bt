@@ -1,0 +1,55 @@
+#!/usr/bin/env bpftrace
+/*
+ * bind.bt — emits {ts_ns, pid, comm, family, addr, port, proto} JSONL for
+ * every bind(2) syscall. Captures IPv4, IPv6, and AF_UNIX in one stream.
+ *
+ * proto is "tcp" if the socket was SOCK_STREAM at bind, "udp" if SOCK_DGRAM,
+ * "unix" if AF_UNIX, "?" otherwise. We approximate proto by storing the
+ * type at socket-create time; tracking it perfectly would require kprobing
+ * inet_bind, which has different signatures across kernels.
+ */
+
+#include <linux/in.h>
+#include <linux/in6.h>
+#include <linux/un.h>
+
+BEGIN { printf("[\n"); }
+
+tracepoint:syscalls:sys_enter_socket
+{
+    @sock_type[tid] = args->type & 0xf;  // SOCK_STREAM=1, SOCK_DGRAM=2
+}
+
+tracepoint:syscalls:sys_exit_socket
+{
+    delete(@sock_type[tid]);
+}
+
+tracepoint:syscalls:sys_enter_bind
+{
+    $umyaddr = (struct sockaddr *)args->umyaddr;
+    $family = $umyaddr->sa_family;
+
+    $port = 0;
+    $addr_str = "";
+    if ($family == AF_INET) {
+        $sin = (struct sockaddr_in *)$umyaddr;
+        $port = ($sin->sin_port >> 8) | (($sin->sin_port & 0xff) << 8);
+        $addr_str = ntop(AF_INET, $sin->sin_addr.s_addr);
+    } else if ($family == AF_INET6) {
+        $sin6 = (struct sockaddr_in6 *)$umyaddr;
+        $port = ($sin6->sin6_port >> 8) | (($sin6->sin6_port & 0xff) << 8);
+        $addr_str = ntop(AF_INET6, $sin6->sin6_addr.in6_u.u6_addr8);
+    } else if ($family == AF_UNIX) {
+        $sun = (struct sockaddr_un *)$umyaddr;
+        $addr_str = str($sun->sun_path);
+    }
+
+    $proto = "?";
+    if (@sock_type[tid] == 1) { $proto = "tcp"; }
+    else if (@sock_type[tid] == 2) { $proto = "udp"; }
+    else if ($family == AF_UNIX) { $proto = "unix"; }
+
+    printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
+        nsecs, pid, comm, $family, $addr_str, $port, $proto);
+}

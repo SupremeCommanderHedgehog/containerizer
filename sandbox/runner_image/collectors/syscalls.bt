@@ -1,0 +1,38 @@
+#!/usr/bin/env bpftrace
+/*
+ * syscalls.bt — counts every syscall per (pid, syscall_id) and emits one
+ * JSONL record per unique tuple at END. First-seen timestamp is recorded
+ * so the analyzer can attribute syscalls to the install vs runtime phase
+ * by comparing against PHASE_MARKER.
+ *
+ * The map keys store both pid and syscall_id, encoded as (pid << 16 | id).
+ * 16 bits is plenty for syscall_id (current max ~450) but the comm needs
+ * its own map keyed on pid.
+ */
+
+BEGIN { printf("[\n"); }
+
+tracepoint:raw_syscalls:sys_enter
+{
+    $key = (((uint64)pid) << 16) | (args->id & 0xffff);
+    @count[$key] = count();
+    if (!@first_ts[$key]) {
+        @first_ts[$key] = nsecs;
+        @comm[pid] = comm;
+    }
+}
+
+END
+{
+    for ($kv : @count) {
+        $key = $kv.0;
+        $cnt = $kv.1;
+        $pid = (uint32)($key >> 16);
+        $sysid = (uint32)($key & 0xffff);
+        printf("{\"pid\":%d,\"comm\":\"%s\",\"syscall_id\":%d,\"count\":%llu,\"first_ts_ns\":%llu}\n",
+            $pid, @comm[$pid], $sysid, $cnt, @first_ts[$key]);
+    }
+    clear(@count);
+    clear(@first_ts);
+    clear(@comm);
+}
