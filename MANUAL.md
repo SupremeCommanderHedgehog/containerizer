@@ -94,20 +94,22 @@ The exact `glibc_min` depends on the binary the fixture was carved from, but `ba
 To exercise the probe against something more interesting, pull a binary straight out of a public image. With the Podman machine running:
 
 ```pwsh
-podman run --rm debian:bookworm-slim cat /usr/bin/curl > C:\Temp\curl-bookworm.bin
-containerizer probe C:\Temp\curl-bookworm.bin
+podman run --rm debian:bookworm-slim cat /usr/bin/dpkg > C:\Temp\dpkg-bookworm.bin
+containerizer probe C:\Temp\dpkg-bookworm.bin
 ```
 
-`needed_libs` should be long (libc, libssl, libcrypto, libz, …) and `glibc_min` should be `2.34` or higher. The suggested base image should be `ubuntu:22.04` (glibc 2.31–2.35 routes there since v0.2.1).
+`/usr/bin/dpkg` is Debian's own package manager and is guaranteed to be present in any Debian image. `needed_libs` should be long (libbz2, libc, liblzma, libmd, libselinux, libzstd, libz) and `glibc_min` should be `2.34`. The suggested base image should be `ubuntu:22.04` (glibc 2.31–2.35 routes there since v0.2.1).
 
 Other useful targets to try:
 
 | Image | Binary | What it tests |
 |---|---|---|
 | `ubuntu:20.04` | `/usr/bin/ls` | glibc 2.31 → `ubuntu:22.04` |
-| `ubuntu:24.04` | `/usr/bin/python3` | glibc 2.39 → `ubuntu:24.04` (glibc > 2.35) |
+| `ubuntu:24.04` | `/usr/bin/find` | glibc 2.39 → `ubuntu:24.04` (glibc > 2.35) |
 | `alpine:latest` | `/bin/busybox` | musl-linked, expect `interpreter` ending in `ld-musl-*.so.1` and `glibc_min: null` |
 | `arm64v8/debian:bookworm-slim` (with `--platform linux/arm64`) | `/usr/bin/true` | `arch: aarch64`, `bit: 64` |
+
+Slim Debian and minimal Ubuntu images ship only what's strictly required (no `curl`, no `python3`, no `wget`), so stick to binaries from coreutils, findutils, dpkg, apt, or bash when picking targets — or pull from a fatter image like `python:3.12-slim` if you specifically want a Python binary.
 
 The musl case is interesting: it should detect as ELF, find no `.gnu.version_r` glibc entries, and report `glibc_min: null`. The base-image picker then falls back to `ubuntu:24.04` with the reason `no glibc requirement detected; picked ubuntu:24.04`.
 
