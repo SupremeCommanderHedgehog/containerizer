@@ -46,10 +46,24 @@ finalize_marker() {
     : > "$TRACE_DIR/$marker"
 }
 
-trap 'finalize_marker PARTIAL; exit 0' INT
+trap 'finalize_marker PARTIAL; exit 0' INT TERM
 
 echo "trace-orchestrator: running installer $INSTALLER" >&2
-"$INSTALLER" 2>&1 | tee "$TRACE_DIR/install.log" || true
+
+# Capture the installer's exit code (PIPESTATUS[0]) without letting `set -e` /
+# `pipefail` abort the orchestrator — we want to finalise PARTIAL on failure,
+# not crash out.
+set +o pipefail
+"$INSTALLER" 2>&1 | tee "$TRACE_DIR/install.log"
+install_rc=${PIPESTATUS[0]}
+set -o pipefail
+
+if (( install_rc != 0 )); then
+    echo "failed" > "$TRACE_DIR/install.status"
+    echo "trace-orchestrator: installer exited non-zero ($install_rc); finalising PARTIAL" >&2
+    finalize_marker PARTIAL
+    exit 0
+fi
 awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
     > "$TRACE_DIR/PHASE_MARKER"
 
