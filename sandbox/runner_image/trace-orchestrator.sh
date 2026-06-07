@@ -50,7 +50,7 @@ trap 'finalize_marker PARTIAL; exit 0' INT
 
 echo "trace-orchestrator: running installer $INSTALLER" >&2
 "$INSTALLER" 2>&1 | tee "$TRACE_DIR/install.log" || true
-echo "monotonic_ns: $(awk 'BEGIN{getline t < "/proc/uptime"; split(t,a,"."); printf "%s%s\n", a[1], a[2]}')" \
+awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
     > "$TRACE_DIR/PHASE_MARKER"
 
 echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
