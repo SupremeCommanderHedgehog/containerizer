@@ -219,6 +219,7 @@ def test_trace_warns_on_fallbacks_and_propagates_nonzero_exit(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_true_when_a_machine_reports_running(
     mock_run: MagicMock,
 ) -> None:
@@ -227,6 +228,7 @@ def test_podman_machine_is_running_true_when_a_machine_reports_running(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_no_machine_is_running(
     mock_run: MagicMock,
 ) -> None:
@@ -235,6 +237,7 @@ def test_podman_machine_is_running_false_when_no_machine_is_running(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_podman_is_not_installed(
     mock_run: MagicMock,
 ) -> None:
@@ -243,6 +246,7 @@ def test_podman_machine_is_running_false_when_podman_is_not_installed(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_command_fails(
     mock_run: MagicMock,
 ) -> None:
@@ -251,8 +255,33 @@ def test_podman_machine_is_running_false_when_command_fails(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_output_is_not_json(
     mock_run: MagicMock,
 ) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="not-json")
+    assert _podman_machine_is_running() is False
+
+
+@patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "linux")
+def test_podman_machine_is_running_returns_true_on_linux_when_podman_present(
+    mock_run: MagicMock,
+) -> None:
+    from containerizer.trace.cli import _podman_machine_is_running
+
+    mock_run.return_value.returncode = 0
+    assert _podman_machine_is_running() is True
+    # Should call `podman --version`, not `podman machine ls`.
+    args = mock_run.call_args.args[0]
+    assert args == ["podman", "--version"]
+
+
+@patch("containerizer.trace.cli.subprocess.run", side_effect=FileNotFoundError)
+@patch("containerizer.trace.cli.sys.platform", "linux")
+def test_podman_machine_is_running_returns_false_on_linux_when_podman_missing(
+    mock_run: MagicMock,
+) -> None:
+    from containerizer.trace.cli import _podman_machine_is_running
+
     assert _podman_machine_is_running() is False
