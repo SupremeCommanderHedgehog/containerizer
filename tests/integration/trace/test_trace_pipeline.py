@@ -90,10 +90,13 @@ def test_trace_pipeline_against_synthetic_fixture(tmp_path: Path) -> None:
                 continue
             assert path.stat().st_size > 0, f"empty {path}"
 
+        # bpftrace auto-dumps any non-cleared map contents at script exit
+        # (e.g. "@args[3429]: 140732759619824"), so filter to lines that
+        # actually look like our JSON records.
         opens = [
             json.loads(line)
             for line in (out / "open.jsonl").read_text().splitlines()
-            if line.strip()
+            if line.startswith("{")
         ]
         assert any(rec.get("path") == "/etc/passwd" for rec in opens), (
             "expected /etc/passwd in open.jsonl"
