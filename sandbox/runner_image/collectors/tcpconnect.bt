@@ -1,0 +1,45 @@
+#!/usr/bin/env bpftrace
+/*
+ * tcpconnect.bt — emit JSONL for every outbound TCP connect().
+ *
+ * Schema (one JSON object per line):
+ *     {ts_ns, pid, comm, family, saddr, sport, daddr, dport}
+ *
+ * Replaces the bcc-based tcpconnect.py (issue #77 — bcc fails to
+ * preprocess <net/sock.h> on Ubuntu 6.17 runner kernel-headers because
+ * include/linux/bpf.h does sizeof(struct bpf_wq) on a type whose full
+ * definition lives in kernel/bpf/helpers.c; clang outside the kernel
+ * build can't complete it). bpftrace resolves struct sock layout from
+ * /sys/kernel/btf/vmlinux directly, so we never need to pull in the
+ * broken kernel header.
+ *
+ * Probes:
+ *   kprobe:tcp_v4_connect — IPv4 connect attempts.
+ *   kprobe:tcp_v6_connect — IPv6 connect attempts.
+ * Both fire at the syscall entry path, so failed attempts are captured
+ * just like the prior tcpconnect.py.
+ */
+
+kprobe:tcp_v4_connect
+{
+    $sk = (struct sock *)arg0;
+    $sport = (uint32)$sk->__sk_common.skc_num;
+    $dport_be = (uint32)$sk->__sk_common.skc_dport;
+    $dport = ($dport_be >> 8) | (($dport_be & 0xff) << 8);
+    printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"saddr\":\"%s\",\"sport\":%d,\"daddr\":\"%s\",\"dport\":%d}\n",
+        nsecs, pid, comm, 2,
+        ntop(AF_INET, $sk->__sk_common.skc_rcv_saddr), $sport,
+        ntop(AF_INET, $sk->__sk_common.skc_daddr), $dport);
+}
+
+kprobe:tcp_v6_connect
+{
+    $sk = (struct sock *)arg0;
+    $sport = (uint32)$sk->__sk_common.skc_num;
+    $dport_be = (uint32)$sk->__sk_common.skc_dport;
+    $dport = ($dport_be >> 8) | (($dport_be & 0xff) << 8);
+    printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"saddr\":\"%s\",\"sport\":%d,\"daddr\":\"%s\",\"dport\":%d}\n",
+        nsecs, pid, comm, 10,
+        ntop(AF_INET6, $sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8), $sport,
+        ntop(AF_INET6, $sk->__sk_common.skc_v6_daddr.in6_u.u6_addr8), $dport);
+}
