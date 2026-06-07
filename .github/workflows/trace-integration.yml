@@ -89,9 +89,27 @@ jobs:
           fi
           echo "=== $d ==="
           sudo ls -la "$d"
-          for f in "$d"/*.err "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl; do
+          # For *.err show head AND tail: bcc compiles emit a lot of warning
+          # noise before the actual error, so 4000 chars of head misses it.
+          for f in "$d"/*.err; do
+            [ -e "$f" ] || continue
+            echo "--- $(basename "$f") (head 1500) ---"
+            sudo head -c 1500 "$f"
+            echo
+            echo "--- $(basename "$f") (tail 3000) ---"
+            sudo tail -c 3000 "$f"
+            echo
+          done
+          for f in "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl; do
             [ -e "$f" ] || continue
             echo "--- $(basename "$f") ---"
             sudo head -c 4000 "$f"
             echo
           done
+      - name: Upload trace debug dump
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: trace-debug-dump
+          path: /tmp/trace-debug-dump
+          if-no-files-found: ignore
