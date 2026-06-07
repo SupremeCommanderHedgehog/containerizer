@@ -219,6 +219,7 @@ def test_trace_warns_on_fallbacks_and_propagates_nonzero_exit(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_true_when_a_machine_reports_running(
     mock_run: MagicMock,
 ) -> None:
@@ -227,6 +228,7 @@ def test_podman_machine_is_running_true_when_a_machine_reports_running(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_no_machine_is_running(
     mock_run: MagicMock,
 ) -> None:
@@ -235,6 +237,7 @@ def test_podman_machine_is_running_false_when_no_machine_is_running(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_podman_is_not_installed(
     mock_run: MagicMock,
 ) -> None:
@@ -243,6 +246,7 @@ def test_podman_machine_is_running_false_when_podman_is_not_installed(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_command_fails(
     mock_run: MagicMock,
 ) -> None:
@@ -251,6 +255,7 @@ def test_podman_machine_is_running_false_when_command_fails(
 
 
 @patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "win32")
 def test_podman_machine_is_running_false_when_output_is_not_json(
     mock_run: MagicMock,
 ) -> None:
