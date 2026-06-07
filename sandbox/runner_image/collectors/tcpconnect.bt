@@ -18,7 +18,15 @@
  *   kprobe:tcp_v6_connect — IPv6 connect attempts.
  * Both fire at the syscall entry path, so failed attempts are captured
  * just like the prior tcpconnect.py.
+ *
+ * linux/in.h is included for the AF_INET / AF_INET6 numeric defines
+ * that ntop() expects. It's a small UAPI header that does NOT pull in
+ * the broken include/linux/bpf.h chain (that's `<net/sock.h>` that
+ * does that). struct sock is resolved from BTF.
  */
+
+#include <linux/in.h>
+#include <linux/in6.h>
 
 kprobe:tcp_v4_connect
 {

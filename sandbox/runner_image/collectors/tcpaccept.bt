@@ -12,7 +12,13 @@
  * Probe:
  *   kretprobe:inet_csk_accept — fires when accept(2) returns. retval is
  *   the new struct sock *; NULL means accept failed and we skip.
+ *
+ * linux/in.h is included for the AF_INET / AF_INET6 numeric defines.
+ * See tcpconnect.bt for the include-vs-BTF rationale.
  */
+
+#include <linux/in.h>
+#include <linux/in6.h>
 
 kretprobe:inet_csk_accept
 / retval != 0 /
