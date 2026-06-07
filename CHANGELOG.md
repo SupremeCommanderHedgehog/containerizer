@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.3.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.2.1...v0.3.0) (2026-06-07)
+
+
+### Features
+
+* **sandbox/collectors:** bind.bt bpftrace tracer for bind() syscalls ([#51](https://github.com/SupremeCommanderHedgehog/containerizer/issues/51)) ([2eb5234](https://github.com/SupremeCommanderHedgehog/containerizer/commit/2eb5234a2a0b00f630bbfef16d24cc9808afc8ea))
+* **sandbox/collectors:** capable bcc-tools wrapper to JSONL ([#56](https://github.com/SupremeCommanderHedgehog/containerizer/issues/56)) ([d0ca290](https://github.com/SupremeCommanderHedgehog/containerizer/commit/d0ca2900f5b1ed3ae6a0eaaba3840a86ff5e843c))
+* **sandbox/collectors:** open.bt bpftrace tracer for file accesses ([#50](https://github.com/SupremeCommanderHedgehog/containerizer/issues/50)) ([e6cde13](https://github.com/SupremeCommanderHedgehog/containerizer/commit/e6cde1344f7dcd8020caa6c3375e66d49109b1ce))
+* **sandbox/collectors:** syscalls.bt bpftrace tracer for syscall rollup ([#53](https://github.com/SupremeCommanderHedgehog/containerizer/issues/53)) ([71d89b4](https://github.com/SupremeCommanderHedgehog/containerizer/commit/71d89b44bd3670c064ce375363bd65da2df1c329))
+* **sandbox/collectors:** tcpaccept bcc-tools wrapper to JSONL ([#55](https://github.com/SupremeCommanderHedgehog/containerizer/issues/55)) ([4ee02af](https://github.com/SupremeCommanderHedgehog/containerizer/commit/4ee02afcfaf2c10cd28dccc168724089d840bf78))
+* **sandbox/collectors:** tcpconnect bcc-tools wrapper to JSONL ([#54](https://github.com/SupremeCommanderHedgehog/containerizer/issues/54)) ([c3d2ceb](https://github.com/SupremeCommanderHedgehog/containerizer/commit/c3d2ceb66df3234f7afe19883ef97c31bf19d9ca))
+* **sandbox:** bash trace-orchestrator skeleton with EOF-as-Enter finalize ([#49](https://github.com/SupremeCommanderHedgehog/containerizer/issues/49)) ([76c2ac6](https://github.com/SupremeCommanderHedgehog/containerizer/commit/76c2ac69f0090706536e20b558a8a23c52476486))
+* **sandbox:** runner image Containerfile and sandbox/ scaffolding ([#48](https://github.com/SupremeCommanderHedgehog/containerizer/issues/48)) ([f280851](https://github.com/SupremeCommanderHedgehog/containerizer/commit/f28085147db7c04b2eba911b87c3d2bf7bbeac2c))
+* **sandbox:** strace fallback when bcc/bpftrace collector fails to attach ([#59](https://github.com/SupremeCommanderHedgehog/containerizer/issues/59)) ([2f69a27](https://github.com/SupremeCommanderHedgehog/containerizer/commit/2f69a2779d4bca7270b6ac72b60b32d60cfe9c58))
+* **sandbox:** wire trace-orchestrator to launch all six collectors ([#57](https://github.com/SupremeCommanderHedgehog/containerizer/issues/57)) ([1d67384](https://github.com/SupremeCommanderHedgehog/containerizer/commit/1d67384e1748f27448ebe268dd7382698a870f25))
+* **trace:** containerizer trace subcommand with pre-flight and summary ([#62](https://github.com/SupremeCommanderHedgehog/containerizer/issues/62)) ([7adec2a](https://github.com/SupremeCommanderHedgehog/containerizer/commit/7adec2a7eaf48a7ce8585c6a4160bdda2055df02))
+* **trace:** RunnerImage with hash-based tag and lazy podman build ([#60](https://github.com/SupremeCommanderHedgehog/containerizer/issues/60)) ([eda9c2e](https://github.com/SupremeCommanderHedgehog/containerizer/commit/eda9c2edf808fc0b2a549726f48f49d7b65326a7))
+* **trace:** TraceRunner constructs podman-run argv and execs ([#61](https://github.com/SupremeCommanderHedgehog/containerizer/issues/61)) ([eab0aef](https://github.com/SupremeCommanderHedgehog/containerizer/commit/eab0aef2d0c0e183272486cb2866ffb4f1a9527e))
+
+
+### Documentation
+
+* add MANUAL.md for hands-on testing ([#21](https://github.com/SupremeCommanderHedgehog/containerizer/issues/21)) ([f0bce6f](https://github.com/SupremeCommanderHedgehog/containerizer/commit/f0bce6f98a82796347e0f9c7e67393bf28646dcd))
+
 ## [0.2.1](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.2.0...v0.2.1) (2026-06-06)
 
 
