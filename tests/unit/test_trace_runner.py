@@ -25,7 +25,8 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     argv = runner.argv()
     assert argv[:2] == ["podman", "run"]
     assert "--rm" in argv
-    assert "-it" in argv
+    assert "-i" in argv
+    assert "-t" not in argv
     assert "--privileged" in argv
     assert "--pid=host" in argv
     assert "-v" in argv

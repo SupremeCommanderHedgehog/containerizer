@@ -40,7 +40,7 @@ class TraceRunner:
             "podman",
             "run",
             "--rm",
-            "-it",
+            "-i",
             "--privileged",
             "--pid=host",
             "-v",

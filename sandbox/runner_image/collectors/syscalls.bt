@@ -28,7 +28,7 @@ END
         $pid = (uint32)($key >> 16);
         $sysid = (uint32)($key & 0xffff);
         printf("{\"pid\":%d,\"comm\":\"%s\",\"syscall_id\":%d,\"count\":%llu,\"first_ts_ns\":%llu}\n",
-            $pid, @comm[$pid], $sysid, $cnt, @first_ts[$key]);
+            $pid, @comm[$pid], $sysid, (uint64)$cnt, @first_ts[$key]);
     }
     clear(@count);
     clear(@first_ts);
