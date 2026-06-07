@@ -23,7 +23,26 @@ def _sandbox_dir() -> Path:
 
 
 def _podman_machine_is_running() -> bool:
-    """Return True iff at least one podman machine reports State=Running."""
+    """Return True iff podman is usable.
+
+    On Linux, podman runs natively and there is no "machine" — return True if
+    the `podman` binary is on PATH (the actual usability check happens when
+    podman is invoked later). On Windows / macOS, podman runs inside a
+    Podman Desktop machine, so check that at least one machine reports
+    State=Running.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            subprocess.run(
+                ["podman", "--version"],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+        except FileNotFoundError:
+            return False
+        return True
+
     try:
         result = subprocess.run(
             ["podman", "machine", "ls", "--format", "json"],
