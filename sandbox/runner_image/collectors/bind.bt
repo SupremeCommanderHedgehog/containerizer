@@ -44,29 +44,30 @@ tracepoint:syscalls:sys_enter_bind
     $umyaddr = (struct sockaddr *)args->umyaddr;
     $family = $umyaddr->sa_family;
 
-    $port = 0;
-    $addr_str = "";
-    if ($family == AF_INET) {
-        $sin = (struct sockaddr_in *)$umyaddr;
-        $port = ($sin->sin_port >> 8) | (($sin->sin_port & 0xff) << 8);
-        $addr_str = ntop(AF_INET, $sin->sin_addr.s_addr);
-    } else if ($family == AF_INET6) {
-        $sin6 = (struct sockaddr_in6 *)$umyaddr;
-        $port = ($sin6->sin6_port >> 8) | (($sin6->sin6_port & 0xff) << 8);
-        $addr_str = ntop(AF_INET6, $sin6->sin6_addr.in6_u.u6_addr8);
-    } else if ($family == AF_UNIX) {
-        $sun = (struct sockaddr_un *)$umyaddr;
-        $addr_str = str($sun->sun_path);
-    }
-
+    // bpftrace's strict typing won't let a single variable hold both
+    // string and inet (ntop) types, so emit one printf per family branch.
     $key = (((uint64)pid) << 32) | (uint32)args->fd;
     $stype = @sock_type[$key];
 
-    $proto = "?";
-    if ($stype == 1) { $proto = "tcp"; }
-    else if ($stype == 2) { $proto = "udp"; }
-    else if ($family == AF_UNIX) { $proto = "unix"; }
-
-    printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
-        nsecs, pid, comm, $family, $addr_str, $port, $proto);
+    if ($family == AF_INET) {
+        $sin = (struct sockaddr_in *)$umyaddr;
+        $port = ($sin->sin_port >> 8) | (($sin->sin_port & 0xff) << 8);
+        $proto4 = "?";
+        if ($stype == 1) { $proto4 = "tcp"; }
+        else if ($stype == 2) { $proto4 = "udp"; }
+        printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
+            nsecs, pid, comm, $family, ntop(AF_INET, $sin->sin_addr.s_addr), $port, $proto4);
+    } else if ($family == AF_INET6) {
+        $sin6 = (struct sockaddr_in6 *)$umyaddr;
+        $port6 = ($sin6->sin6_port >> 8) | (($sin6->sin6_port & 0xff) << 8);
+        $proto6 = "?";
+        if ($stype == 1) { $proto6 = "tcp"; }
+        else if ($stype == 2) { $proto6 = "udp"; }
+        printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
+            nsecs, pid, comm, $family, ntop(AF_INET6, $sin6->sin6_addr.in6_u.u6_addr8), $port6, $proto6);
+    } else if ($family == AF_UNIX) {
+        $sun = (struct sockaddr_un *)$umyaddr;
+        printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"addr\":\"%s\",\"port\":%d,\"proto\":\"%s\"}\n",
+            nsecs, pid, comm, $family, $sun->sun_path, 0, "unix");
+    }
 }
