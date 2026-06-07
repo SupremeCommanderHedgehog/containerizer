@@ -1,0 +1,32 @@
+#!/usr/bin/env bpftrace
+/*
+ * open.bt — emits {ts_ns, pid, comm, path, flags, mode, ret} JSONL records
+ * for every openat(2) syscall. Stdout is captured by the orchestrator into
+ * /work/trace/open.jsonl.
+ *
+ * Notes:
+ *   * We track both sys_enter_openat (to capture flags, mode, path) and
+ *     sys_exit_openat (to capture ret); join via @args[tid].
+ *   * Failed opens (ret < 0) are deliberately included so the analyzer can
+ *     distinguish "tried to read" from "actually read".
+ */
+
+BEGIN { printf("[\n"); }
+
+tracepoint:syscalls:sys_enter_openat
+{
+    @args[tid] = (uint64)args->filename;
+    @flags[tid] = args->flags;
+    @mode[tid] = args->mode;
+}
+
+tracepoint:syscalls:sys_exit_openat
+/ @args[tid] /
+{
+    $path = str(@args[tid]);
+    printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"path\":\"%s\",\"flags\":%d,\"mode\":%d,\"ret\":%ld}\n",
+        nsecs, pid, comm, $path, @flags[tid], @mode[tid], args->ret);
+    delete(@args[tid]);
+    delete(@flags[tid]);
+    delete(@mode[tid]);
+}
