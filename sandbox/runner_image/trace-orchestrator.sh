@@ -56,8 +56,12 @@ launch_py connect  /opt/containerizer/collectors/tcpconnect.py
 launch_py accept   /opt/containerizer/collectors/tcpaccept.py
 launch_py capable  /opt/containerizer/collectors/capable.py
 
-# Give collectors ~2s to attach probes before we exec the installer.
-sleep 2
+# Give collectors time to attach probes before we exec the installer.
+# bpftrace attaches in <1s; bcc compiles its BPF program at startup and
+# can take 5-10s, so 2s was too short for the bcc collectors. Override
+# with CONTAINERIZER_ATTACH_GRACE_SECONDS for interactive runs that want
+# a faster turnaround at the cost of some early events.
+sleep "${CONTAINERIZER_ATTACH_GRACE_SECONDS:-15}"
 
 finalize_marker() {
     local marker="$1"  # COMPLETE or PARTIAL
