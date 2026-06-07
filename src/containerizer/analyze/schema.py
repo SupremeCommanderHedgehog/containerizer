@@ -19,7 +19,7 @@ class TracePath(BaseModel):
     on the mount-relevant root (see spec §5.3).
     """
 
-    model_config = ConfigDict(populate_by_name=True)
+    model_config = ConfigDict(extra="forbid", frozen=True, populate_by_name=True)
 
     path: str
     ops: list[Literal["read", "write", "mkdir", "stat", "exec"]]
@@ -36,6 +36,8 @@ class TracePath(BaseModel):
 
 
 class TracePort(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     port: int
     proto: Literal["tcp", "udp", "unix", "?"]
     by: str
@@ -44,12 +46,16 @@ class TracePort(BaseModel):
 
 
 class TraceOutbound(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     daddr: str
     dport: int
     comm: str
 
 
 class TracePhase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     duration_s: float
     exit: int | None = None
     paths: list[TracePath]
@@ -61,6 +67,8 @@ class TracePhase(BaseModel):
 
 
 class TraceJson(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     schema_version: Literal[1] = 1
     phase_marker_ns: int | None
     marker: Literal["COMPLETE", "PARTIAL"]
@@ -70,6 +78,8 @@ class TraceJson(BaseModel):
 
 
 class PolicyImage(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     base: str
     apt_packages: list[str]
     installer_path: str = "/installer"
@@ -79,29 +89,37 @@ class PolicyImage(BaseModel):
 
 
 class PolicyVolume(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     name: str
     mount: str
 
 
 class PolicyPort(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     host: int
     container: int
     proto: Literal["tcp", "udp"]
 
 
 class PolicyRuntime(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     volumes: list[PolicyVolume]
     tmpfs: list[str]
     binds_ro: list[str]
     publish_ports: list[PolicyPort]
     caps_add: list[str]
-    caps_drop: list[str] = ["ALL"]
+    caps_drop: list[str] = Field(default_factory=lambda: ["ALL"])
     seccomp_syscalls: list[int]
     read_only_rootfs: bool
     no_new_privileges: bool = True
 
 
 class PolicyJson(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     schema_version: Literal[1] = 1
     image: PolicyImage
     runtime: PolicyRuntime
