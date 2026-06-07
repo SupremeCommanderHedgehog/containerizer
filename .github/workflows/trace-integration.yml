@@ -96,6 +96,11 @@ jobs:
           sudo cat "$tdir/connect.err" 2>/dev/null
           echo "--- accept.err (full) ---"
           sudo cat "$tdir/accept.err" 2>/dev/null
+          echo "--- connect.jsonl (head) ---"
+          sudo head -c 2000 "$tdir/connect.jsonl" 2>/dev/null
+          echo
+          echo "--- accept.jsonl (xxd) ---"
+          sudo xxd "$tdir/accept.jsonl" 2>/dev/null | head -5
       - name: Dump trace dir on failure
         if: failure()
         run: |
