@@ -75,15 +75,63 @@ finalize_marker() {
 
 trap 'finalize_marker PARTIAL; exit 0' INT TERM
 
+# After the 2s attach grace, check whether each collector is still alive.
+# A dead collector means probe attach failed (e.g., no BTF, kheaders mismatch).
+declare -A fallbacks=()
+declare -A domain=(
+    [open]="-e trace=file"
+    [bind]="-e trace=network"
+    [syscalls]="-e trace=all"
+    [connect]="-e trace=network"
+    [accept]="-e trace=network"
+    [capable]="-e trace=%audit"
+)
+
+# collector_pids order matches the launch order in the previous block:
+# open, bind, syscalls, connect, accept, capable
+collector_names=(open bind syscalls connect accept capable)
+for idx in "${!collector_names[@]}"; do
+    name="${collector_names[$idx]}"
+    pid="${collector_pids[$idx]}"
+    if ! kill -0 "$pid" 2>/dev/null; then
+        reason=$(tail -n 1 "$TRACE_DIR/$name.err" 2>/dev/null || echo "unknown attach failure")
+        fallbacks[$name]="$reason"
+        echo "trace-orchestrator: $name failed to attach: $reason" >&2
+    fi
+done
+
+# Persist the fallbacks decision so the host wrapper can surface it.
+{
+    printf "{"
+    first=1
+    for k in "${!fallbacks[@]}"; do
+        if (( first )); then first=0; else printf ","; fi
+        printf '"%s":{"reason":"%s","fallback":"strace %s"}' \
+            "$k" "${fallbacks[$k]}" "${domain[$k]}"
+    done
+    printf "}\n"
+} > "$TRACE_DIR/FALLBACKS.json"
+
 echo "trace-orchestrator: running installer $INSTALLER" >&2
 
-# Capture the installer's exit code (PIPESTATUS[0]) without letting `set -e` /
-# `pipefail` abort the orchestrator — we want to finalise PARTIAL on failure,
-# not crash out.
-set +o pipefail
-"$INSTALLER" 2>&1 | tee "$TRACE_DIR/install.log"
-install_rc=${PIPESTATUS[0]}
-set -o pipefail
+# Run installer in the background with stdout+stderr captured via a process-
+# substitution fd, so $! is the installer's pid (not tee's).
+exec 3> >(tee "$TRACE_DIR/install.log")
+"$INSTALLER" >&3 2>&3 &
+installer_pid="$!"
+exec 3>&-
+
+# Spawn one strace per failed collector, targeting the installer pid. Each
+# strace exits when the traced process does.
+for name in "${!fallbacks[@]}"; do
+    # shellcheck disable=SC2086  # we WANT word splitting on "${domain[$name]}"
+    strace -f -o "$TRACE_DIR/$name.fallback.log" ${domain[$name]} -p "$installer_pid" 2>/dev/null &
+    collector_pids+=("$!")
+done
+
+wait "$installer_pid"
+install_rc="$?"
+echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
 if (( install_rc != 0 )); then
     echo "failed" > "$TRACE_DIR/install.status"
