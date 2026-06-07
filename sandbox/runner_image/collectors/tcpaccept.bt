@@ -11,7 +11,10 @@
  *
  * Probe:
  *   kretprobe:inet_csk_accept — fires when accept(2) returns. retval is
- *   the new struct sock *; NULL means accept failed and we skip.
+ *   the new struct sock *; if it points at a non-inet family we just
+ *   silently skip the emit (no probe predicate, matching upstream
+ *   tools/tcpaccept.bt; a null retval reads back as $family == 0 which
+ *   matches neither branch and is dropped naturally).
  *
  * linux/in.h is included for the AF_INET / AF_INET6 numeric defines.
  * See tcpconnect.bt for the include-vs-BTF rationale.
@@ -21,7 +24,6 @@
 #include <linux/in6.h>
 
 kretprobe:inet_csk_accept
-/ retval != 0 /
 {
     $sk = (struct sock *)retval;
     $family = $sk->__sk_common.skc_family;
