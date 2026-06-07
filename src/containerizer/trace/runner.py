@@ -20,14 +20,43 @@ class TraceRunner:
     output_dir: Path
 
     def argv(self) -> list[str]:
-        """Pure: returns the podman command without executing it."""
+        """Pure: returns the podman command without executing it.
+
+        /sys/kernel/{debug,tracing,btf} are all bind-mounted so bpftrace
+        and bcc inside the container can reach the host kernel's tracing
+        infrastructure:
+
+        * /sys/kernel/debug — older kernels host tracefs here as
+          /sys/kernel/debug/tracing.
+        * /sys/kernel/tracing — modern kernels mount tracefs separately
+          at this path.
+        * /sys/kernel/btf — bcc compiles its BPF programs against the
+          running kernel's BTF (`vmlinux`) so it works without bundled
+          kernel headers.
+
+        /lib/modules and /usr/src are also bound read-only so bcc and
+        bpftrace can find the running kernel's headers when CO-RE is
+        not enough (e.g., for bpftrace scripts that #include <linux/in.h>).
+        The host needs `linux-headers-$(uname -r)` installed for these
+        to be useful.
+        """
         return [
             "podman",
             "run",
             "--rm",
-            "-it",
+            "-i",
             "--privileged",
             "--pid=host",
+            "-v",
+            "/sys/kernel/debug:/sys/kernel/debug",
+            "-v",
+            "/sys/kernel/tracing:/sys/kernel/tracing",
+            "-v",
+            "/sys/kernel/btf:/sys/kernel/btf",
+            "-v",
+            "/lib/modules:/lib/modules:ro",
+            "-v",
+            "/usr/src:/usr/src:ro",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
