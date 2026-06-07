@@ -176,6 +176,47 @@ If you want to feel out the glibc → Ubuntu LTS mapping without finding seven r
 
 Scenarios 2 and 3 together let you trip all of these. The "fits Ubuntu 22.04 LTS" wording for the 2.35 case is intentional — Ubuntu 22.04 ships glibc 2.35, so a 2.35 binary is satisfied by 22.04 rather than needing 24.04 (issue #3).
 
+## Scenario 6 — `containerizer trace`
+
+Run a Linux installer inside the trace sandbox and capture six JSONL observation streams.
+
+Prerequisites: a running Podman machine (`podman machine start`).
+
+The first invocation builds the runner image (~5 min one-time on cold cache):
+
+```pwsh
+PS> mkdir C:\Temp\synthetic-trace
+PS> containerizer trace .\tests\fixtures\trace\synthetic-installer.sh -o C:\Temp\synthetic-trace
+```
+
+Expected output:
+
+```
+[image] building localhost/containerizer-runner:sha-...  (first run, ~5 min)
+...
+trace-orchestrator: running installer /installer
+trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin).
+```
+
+Press Enter. Then:
+
+```
+trace-orchestrator: COMPLETE
+
+marker: COMPLETE
+open               12 events
+bind                3 events
+connect             2 events
+accept              1 events
+syscalls           57 events
+capable             4 events
+trace at C:\Temp\synthetic-trace  (next: containerizer analyze, not yet implemented)
+```
+
+The directory contains: six `*.jsonl` streams, `install.log`, `PHASE_MARKER`, `COMPLETE`. If a collector fell back to strace, a `FALLBACKS.json` file appears and the CLI prints a warning paragraph.
+
+Scenario 6 is also what the new `trace-integration` CI job runs on every PR (against the synthetic fixture, not against a real installer).
+
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:
