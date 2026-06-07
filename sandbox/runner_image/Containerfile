@@ -16,6 +16,7 @@ RUN dnf install -y --setopt=install_weak_deps=False \
       systemd dbus \
       bcc-tools bpftrace strace audit-libs audit \
       kernel-headers glibc-headers \
+      nmap-ncat \
       jq python3 \
     && dnf clean all
 
