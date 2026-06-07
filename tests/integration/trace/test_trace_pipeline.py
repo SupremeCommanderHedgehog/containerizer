@@ -69,17 +69,23 @@ def test_trace_pipeline_against_synthetic_fixture(tmp_path: Path) -> None:
         _dump_trace_dir(out, reason=f"returncode={result.returncode}")
         assert result.returncode == 0, (result.stdout, result.stderr)
 
-    assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr was: {result.stderr}"
-    assert (out / "install.log").stat().st_size > 0
+    try:
+        assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr was: {result.stderr}"
+        assert (out / "install.log").stat().st_size > 0
 
-    for collector in ("open", "bind", "connect", "accept", "syscalls", "capable"):
-        path = out / f"{collector}.jsonl"
-        assert path.exists(), f"missing {path}"
-        assert path.stat().st_size > 0, f"empty {path}"
+        for collector in ("open", "bind", "connect", "accept", "syscalls", "capable"):
+            path = out / f"{collector}.jsonl"
+            assert path.exists(), f"missing {path}"
+            assert path.stat().st_size > 0, f"empty {path}"
 
-    opens = [
-        json.loads(line) for line in (out / "open.jsonl").read_text().splitlines() if line.strip()
-    ]
-    assert any(rec.get("path") == "/etc/passwd" for rec in opens), (
-        "expected /etc/passwd in open.jsonl"
-    )
+        opens = [
+            json.loads(line)
+            for line in (out / "open.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        assert any(rec.get("path") == "/etc/passwd" for rec in opens), (
+            "expected /etc/passwd in open.jsonl"
+        )
+    except BaseException:
+        _dump_trace_dir(out, reason="post-trace assertion failed")
+        raise
