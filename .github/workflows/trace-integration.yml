@@ -81,22 +81,21 @@ jobs:
       - name: Dump trace dir contents (always — verify #77)
         if: always()
         run: |
-          d=/tmp/trace-debug-dump
-          if [ ! -d "$d" ]; then
-            echo "(test cleared $d before this step; checking pytest tmp_path instead)"
-            sudo find /tmp/pytest-of-root -maxdepth 4 -name '*.jsonl' -exec ls -la {} \; 2>/dev/null | head -20
-            sudo find /tmp/pytest-of-root -maxdepth 4 -name 'FALLBACKS.json' -exec cat {} \; 2>/dev/null
+          set +e
+          tdir=$(sudo find /tmp/pytest-of-root -maxdepth 4 -name 'trace' -type d 2>/dev/null | head -1)
+          if [ -z "$tdir" ]; then
+            echo "(no trace dir found anywhere)"
             exit 0
           fi
-          echo "=== $d ==="
-          sudo ls -la "$d"
-          sudo cat "$d/FALLBACKS.json" || true
-          echo "--- connect.jsonl ---"
-          sudo head -c 4000 "$d/connect.jsonl" 2>/dev/null
+          echo "=== $tdir ==="
+          sudo ls -la "$tdir"
+          echo "--- FALLBACKS.json ---"
+          sudo cat "$tdir/FALLBACKS.json" 2>/dev/null
           echo
-          echo "--- accept.jsonl ---"
-          sudo head -c 4000 "$d/accept.jsonl" 2>/dev/null
-          echo
+          echo "--- connect.err (full) ---"
+          sudo cat "$tdir/connect.err" 2>/dev/null
+          echo "--- accept.err (full) ---"
+          sudo cat "$tdir/accept.err" 2>/dev/null
       - name: Dump trace dir on failure
         if: failure()
         run: |

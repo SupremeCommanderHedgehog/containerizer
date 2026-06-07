@@ -23,9 +23,8 @@
 kprobe:tcp_v4_connect
 {
     $sk = (struct sock *)arg0;
-    $sport = (uint32)$sk->__sk_common.skc_num;
-    $dport_be = (uint32)$sk->__sk_common.skc_dport;
-    $dport = ($dport_be >> 8) | (($dport_be & 0xff) << 8);
+    $sport = $sk->__sk_common.skc_num;
+    $dport = bswap($sk->__sk_common.skc_dport);
     printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"saddr\":\"%s\",\"sport\":%d,\"daddr\":\"%s\",\"dport\":%d}\n",
         nsecs, pid, comm, 2,
         ntop(AF_INET, $sk->__sk_common.skc_rcv_saddr), $sport,
@@ -35,9 +34,8 @@ kprobe:tcp_v4_connect
 kprobe:tcp_v6_connect
 {
     $sk = (struct sock *)arg0;
-    $sport = (uint32)$sk->__sk_common.skc_num;
-    $dport_be = (uint32)$sk->__sk_common.skc_dport;
-    $dport = ($dport_be >> 8) | (($dport_be & 0xff) << 8);
+    $sport = $sk->__sk_common.skc_num;
+    $dport = bswap($sk->__sk_common.skc_dport);
     printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"saddr\":\"%s\",\"sport\":%d,\"daddr\":\"%s\",\"dport\":%d}\n",
         nsecs, pid, comm, 10,
         ntop(AF_INET6, $sk->__sk_common.skc_v6_rcv_saddr.in6_u.u6_addr8), $sport,

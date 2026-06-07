@@ -15,14 +15,12 @@
  */
 
 kretprobe:inet_csk_accept
+/ retval != 0 /
 {
     $sk = (struct sock *)retval;
-    if ($sk == 0) { return; }
-
     $family = $sk->__sk_common.skc_family;
-    $lport = (uint32)$sk->__sk_common.skc_num;
-    $rport_be = (uint32)$sk->__sk_common.skc_dport;
-    $rport = ($rport_be >> 8) | (($rport_be & 0xff) << 8);
+    $lport = $sk->__sk_common.skc_num;
+    $rport = bswap($sk->__sk_common.skc_dport);
 
     if ($family == AF_INET) {
         printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"family\":%d,\"laddr\":\"%s\",\"lport\":%d,\"raddr\":\"%s\",\"rport\":%d}\n",
