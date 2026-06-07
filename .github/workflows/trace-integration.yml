@@ -43,7 +43,8 @@ jobs:
       - name: Install podman and trace tooling
         run: |
           sudo apt-get update
-          sudo apt-get install -y podman bpfcc-tools bpftrace strace
+          sudo apt-get install -y podman bpfcc-tools bpftrace strace \
+            "linux-headers-$(uname -r)"
       - name: Install package
         run: |
           python -m pip install --upgrade pip
@@ -73,5 +74,24 @@ jobs:
         with:
           path: /tmp/runner-image.tar
           key: runner-image-${{ hashFiles('sandbox/runner_image/**') }}
+      - name: Pre-load runner image into rootful podman store
+        run: sudo podman load -i /tmp/runner-image.tar
       - name: Run trace integration test
-        run: pytest -m integration -v --no-cov
+        run: sudo -E env "PATH=$PATH" pytest -m integration -v --no-cov
+      - name: Dump trace dir on failure
+        if: failure()
+        run: |
+          shopt -s nullglob
+          d=/tmp/trace-debug-dump
+          if [ ! -d "$d" ]; then
+            echo "(no $d — test did not reach the dump path)"
+            exit 0
+          fi
+          echo "=== $d ==="
+          sudo ls -la "$d"
+          for f in "$d"/*.err "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl; do
+            [ -e "$f" ] || continue
+            echo "--- $(basename "$f") ---"
+            sudo head -c 4000 "$f"
+            echo
+          done
