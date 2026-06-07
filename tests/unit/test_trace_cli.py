@@ -256,3 +256,27 @@ def test_podman_machine_is_running_false_when_output_is_not_json(
 ) -> None:
     mock_run.return_value = MagicMock(returncode=0, stdout="not-json")
     assert _podman_machine_is_running() is False
+
+
+@patch("containerizer.trace.cli.subprocess.run")
+@patch("containerizer.trace.cli.sys.platform", "linux")
+def test_podman_machine_is_running_returns_true_on_linux_when_podman_present(
+    mock_run: MagicMock,
+) -> None:
+    from containerizer.trace.cli import _podman_machine_is_running
+
+    mock_run.return_value.returncode = 0
+    assert _podman_machine_is_running() is True
+    # Should call `podman --version`, not `podman machine ls`.
+    args = mock_run.call_args.args[0]
+    assert args == ["podman", "--version"]
+
+
+@patch("containerizer.trace.cli.subprocess.run", side_effect=FileNotFoundError)
+@patch("containerizer.trace.cli.sys.platform", "linux")
+def test_podman_machine_is_running_returns_false_on_linux_when_podman_missing(
+    mock_run: MagicMock,
+) -> None:
+    from containerizer.trace.cli import _podman_machine_is_running
+
+    assert _podman_machine_is_running() is False
