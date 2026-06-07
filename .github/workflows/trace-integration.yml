@@ -77,3 +77,16 @@ jobs:
         run: sudo podman load -i /tmp/runner-image.tar
       - name: Run trace integration test
         run: sudo -E env "PATH=$PATH" pytest -m integration -v --no-cov
+      - name: Dump trace dir on failure
+        if: failure()
+        run: |
+          shopt -s nullglob
+          for d in /tmp/pytest-of-root/pytest-*/test_trace_pipeline_*/trace; do
+            echo "=== $d ==="
+            sudo ls -la "$d"
+            for f in "$d"/*.err "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status; do
+              [ -e "$f" ] || continue
+              echo "--- $(basename "$f") ---"
+              sudo cat "$f" 2>&1 | head -50
+            done
+          done

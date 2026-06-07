@@ -22,12 +22,19 @@ class TraceRunner:
     def argv(self) -> list[str]:
         """Pure: returns the podman command without executing it.
 
-        /sys/kernel/debug and /sys/kernel/tracing are both bind-mounted so
-        bpftrace inside the container can attach to syscall tracepoints.
-        On older kernels tracefs lives at /sys/kernel/debug/tracing; on
-        modern kernels it has its own mount at /sys/kernel/tracing while
-        debugfs at /sys/kernel/debug remains separate. Mounting both keeps
-        bpftrace working across the range.
+        /sys/kernel/{debug,tracing,btf} are all bind-mounted so bpftrace
+        and bcc inside the container can reach the host kernel's tracing
+        infrastructure:
+
+        * /sys/kernel/debug — older kernels host tracefs here as
+          /sys/kernel/debug/tracing.
+        * /sys/kernel/tracing — modern kernels mount tracefs separately
+          at this path.
+        * /sys/kernel/btf — bcc compiles its BPF programs against the
+          running kernel's BTF (`vmlinux`) so it works without bundled
+          kernel headers.
+
+        Mounting all three covers bpftrace (legacy + modern) and bcc.
         """
         return [
             "podman",
@@ -40,6 +47,8 @@ class TraceRunner:
             "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
             "/sys/kernel/tracing:/sys/kernel/tracing",
+            "-v",
+            "/sys/kernel/btf:/sys/kernel/btf",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
