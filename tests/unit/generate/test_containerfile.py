@@ -1,4 +1,4 @@
-"""Tests for analyze.generate.containerfile."""
+"""Tests for containerizer.generate.containerfile."""
 
 from __future__ import annotations
 

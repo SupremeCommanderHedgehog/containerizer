@@ -1,4 +1,4 @@
-"""Tests for analyze.generate.readme."""
+"""Tests for containerizer.generate.readme."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Tests for analyze.generate.quadlet."""
+"""Tests for containerizer.generate.quadlet."""
 
 from __future__ import annotations
 
