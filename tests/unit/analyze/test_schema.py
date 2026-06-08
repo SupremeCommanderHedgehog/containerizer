@@ -92,7 +92,7 @@ def test_policyjson_defaults_and_round_trip() -> None:
     s = pj.model_dump_json(by_alias=True)
     pj2 = PolicyJson.model_validate_json(s)
     assert pj2 == pj
-    assert pj2.schema_version == 1
+    assert pj2.schema_version == 2
     assert pj2.image.installer_path == "/installer"
     assert pj2.runtime.caps_drop == ["ALL"]
     assert pj2.runtime.no_new_privileges is True
@@ -121,3 +121,49 @@ def test_traceoutbound_basic() -> None:
     ob = TraceOutbound(daddr="1.2.3.4", dport=443, comm="curl")
     assert ob.daddr == "1.2.3.4"
     assert ob.dport == 443
+
+
+def test_policy_json_v2_has_warnings_field() -> None:
+    policy = PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            apt_packages=[],
+            post_install_cleanup=[],
+            systemd_required=False,
+            entrypoint=["__UNSET__"],
+        ),
+        runtime=PolicyRuntime(
+            volumes=[],
+            tmpfs=[],
+            binds_ro=[],
+            publish_ports=[],
+            caps_add=[],
+            seccomp_syscalls=[],
+            read_only_rootfs=False,
+        ),
+        warnings=["unknown_rw aggregate: /var/lib/foo"],
+    )
+    assert policy.schema_version == 2
+    assert policy.warnings == ["unknown_rw aggregate: /var/lib/foo"]
+
+
+def test_policy_json_warnings_defaults_to_empty_list() -> None:
+    policy = PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            apt_packages=[],
+            post_install_cleanup=[],
+            systemd_required=False,
+            entrypoint=["__UNSET__"],
+        ),
+        runtime=PolicyRuntime(
+            volumes=[],
+            tmpfs=[],
+            binds_ro=[],
+            publish_ports=[],
+            caps_add=[],
+            seccomp_syscalls=[],
+            read_only_rootfs=False,
+        ),
+    )
+    assert policy.warnings == []
