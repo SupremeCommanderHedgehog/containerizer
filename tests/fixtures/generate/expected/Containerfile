@@ -1,0 +1,9 @@
+FROM ubuntu:24.04
+
+COPY ./installer /installer
+
+RUN /installer \
+ && rm -rf /var/cache/apt/archives/* \
+ && rm -rf /installer
+
+ENTRYPOINT ["/sbin/init"]
