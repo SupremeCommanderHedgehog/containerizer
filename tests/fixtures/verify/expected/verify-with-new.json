@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "original_marker": "COMPLETE",
+  "observed_marker": "COMPLETE",
+  "diff": {
+    "new_paths": [
+      {
+        "path": "/var/log/app",
+        "ops": [
+          "write"
+        ],
+        "class": "persistent_rw",
+        "by": [
+          "app"
+        ]
+      }
+    ],
+    "new_ports": [
+      {
+        "port": 9000,
+        "proto": "tcp",
+        "by": "app",
+        "ipv4": true,
+        "ipv6": false
+      }
+    ],
+    "new_caps": [
+      "CAP_CHOWN"
+    ],
+    "new_syscalls": [
+      2
+    ],
+    "new_execs": [
+      "worker"
+    ]
+  },
+  "warnings": [
+    "observed runtime has 5 events not present in original (1 paths, 1 ports, 1 caps, 1 syscalls, 1 execs)"
+  ]
+}

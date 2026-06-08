@@ -12,6 +12,7 @@ from containerizer.generate.cli import generate_cmd
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
 from containerizer.trace.cli import trace_cmd
+from containerizer.verify.cli import verify_cmd
 
 
 @click.group()
@@ -48,6 +49,7 @@ def probe_cmd(installer: Path, output: Path | None) -> None:
 main.add_command(trace_cmd)
 main.add_command(analyze_cmd)
 main.add_command(generate_cmd)
+main.add_command(verify_cmd)
 
 
 if __name__ == "__main__":
