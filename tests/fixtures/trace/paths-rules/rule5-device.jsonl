@@ -1,0 +1,2 @@
+# expected: [{"path":"/dev/nvidia0","ops":["read"],"class":"device","by":["app"]}]
+{"ts_ns":1,"pid":1,"comm":"app","path":"/dev/nvidia0","flags":0,"mode":0,"ret":3}

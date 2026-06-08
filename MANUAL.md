@@ -217,6 +217,17 @@ The directory contains: six `*.jsonl` streams, `install.log`, `PHASE_MARKER`, `C
 
 Scenario 6 is also what the new `trace-integration` CI job runs on every PR (against the synthetic fixture, not against a real installer).
 
+## Scenario 7 — Analyze a captured trace
+
+After `containerizer trace` produces a trace directory, run the analyzer to derive structured outputs:
+
+```pwsh
+PS> containerizer analyze .\unifi-trace\ -o .\unifi-analyze\
+wrote unifi-analyze\trace.json and unifi-analyze\policy.json
+```
+
+`trace.json` is the normalized view of the raw collector streams (paths classified into image_static / persistent_rw / ephemeral_rw / host_config_ro / device / unknown_rw / unknown_ro, ports aggregated, capabilities deduped, syscalls listed). `policy.json` is the derived input to the M4 generator (volumes, tmpfs, binds_ro, publish_ports, caps_add, seccomp_syscalls, entrypoint). See `docs/superpowers/specs/2026-06-07-containerizer-m3-analyzer-policy.md` for the full schema.
+
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:

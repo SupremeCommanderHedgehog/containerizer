@@ -1,0 +1,2 @@
+# expected: [{"path":"/srv/weird","ops":["write"],"class":"unknown_rw","by":["app"]}]
+{"ts_ns":1,"pid":1,"comm":"app","path":"/srv/weird","flags":1,"mode":420,"ret":3}

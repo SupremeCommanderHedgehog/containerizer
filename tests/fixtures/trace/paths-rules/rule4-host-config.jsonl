@@ -1,0 +1,2 @@
+# expected: [{"path":"/etc/resolv.conf","ops":["read"],"class":"host_config_ro","by":["app"]}]
+{"ts_ns":1,"pid":1,"comm":"app","path":"/etc/resolv.conf","flags":0,"mode":0,"ret":3}
