@@ -1,0 +1,20 @@
+[Unit]
+Description=Containerized synthetic-os
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=synthetic-os:latest
+ContainerName=synthetic-os
+Volume=app-data:/var/lib/app
+Tmpfs=/tmp
+Volume=/etc/resolv.conf:/etc/resolv.conf:ro
+PublishPort=8443:8443/tcp
+DropCapability=ALL
+AddCapability=CAP_NET_BIND_SERVICE
+NoNewPrivileges=true
+ReadOnly=false
+GlobalArgs=--security-opt seccomp=%h/.config/containers/seccomp/synthetic-os.json
+
+[Install]
+WantedBy=default.target

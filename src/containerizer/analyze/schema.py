@@ -120,6 +120,7 @@ class PolicyRuntime(BaseModel):
 class PolicyJson(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[1] = 1
+    schema_version: Literal[2] = 2
     image: PolicyImage
     runtime: PolicyRuntime
+    warnings: list[str] = []

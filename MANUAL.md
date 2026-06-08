@@ -228,6 +228,17 @@ wrote unifi-analyze\trace.json and unifi-analyze\policy.json
 
 `trace.json` is the normalized view of the raw collector streams (paths classified into image_static / persistent_rw / ephemeral_rw / host_config_ro / device / unknown_rw / unknown_ro, ports aggregated, capabilities deduped, syscalls listed). `policy.json` is the derived input to the M4 generator (volumes, tmpfs, binds_ro, publish_ports, caps_add, seccomp_syscalls, entrypoint). See `docs/superpowers/specs/2026-06-07-containerizer-m3-analyzer-policy.md` for the full schema.
 
+## Scenario 8 — Generate hardened container artifacts
+
+After `containerizer analyze` produces a `policy.json`, run the generator to emit the container build context and runtime policy:
+
+```pwsh
+PS> containerizer generate .\unifi-analyze\policy.json -n unifi-os -o .\unifi-build\
+sentinel entrypoint detected — skipping Containerfile and unifi-os.container
+```
+
+The generator writes `Containerfile`, `<name>.container` (a systemd Quadlet unit), `seccomp.json` (OCI-format syscall allowlist), and `README.md` (audit trail) into `<out-dir>`. When the policy's entrypoint is the sentinel `["__UNSET__"]` (no recognizable daemon was traced), the Containerfile and Quadlet are skipped; the seccomp profile and README still ship so you can diff against future runs. See `docs/superpowers/specs/2026-06-07-containerizer-m4-generators.md` for the full contract.
+
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:
