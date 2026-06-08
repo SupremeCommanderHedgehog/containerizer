@@ -1,0 +1,3 @@
+# expected: [{"path":"/opt/example-app","ops":["read"],"class":"image_static","by":["example-app"]}]
+{"ts_ns":1,"pid":1,"comm":"example-app","path":"/opt/example-app/lib/server.jar","flags":0,"mode":0,"ret":3}
+{"ts_ns":2,"pid":1,"comm":"example-app","path":"/opt/example-app/config/system.properties","flags":0,"mode":0,"ret":4}

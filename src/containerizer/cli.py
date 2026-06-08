@@ -7,6 +7,7 @@ from pathlib import Path
 import click
 
 from containerizer import __version__
+from containerizer.analyze.cli import analyze_cmd
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
 from containerizer.trace.cli import trace_cmd
@@ -44,6 +45,7 @@ def probe_cmd(installer: Path, output: Path | None) -> None:
 
 
 main.add_command(trace_cmd)
+main.add_command(analyze_cmd)
 
 
 if __name__ == "__main__":

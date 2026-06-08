@@ -1,0 +1,3 @@
+# expected: [{"path":"/var/lib/example-app","ops":["write"],"class":"persistent_rw","by":["mongod"]}]
+{"ts_ns":1,"pid":1,"comm":"mongod","path":"/var/lib/example-app/db/wt.db","flags":2,"mode":420,"ret":3}
+{"ts_ns":2,"pid":1,"comm":"mongod","path":"/var/lib/example-app/db/journal","flags":1,"mode":420,"ret":4}

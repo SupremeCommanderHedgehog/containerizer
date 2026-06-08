@@ -1,0 +1,3 @@
+# expected: []
+{"ts_ns":1,"pid":1,"comm":"app","path":"/proc/self/status","flags":0,"mode":0,"ret":3}
+{"ts_ns":2,"pid":1,"comm":"app","path":"/sys/kernel/btf/vmlinux","flags":0,"mode":0,"ret":4}
