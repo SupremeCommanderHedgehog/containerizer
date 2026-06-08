@@ -16,7 +16,12 @@ SENTINEL_ENTRYPOINT = "__UNSET__"
 SYSTEMD_COMMS = frozenset({"systemd", "systemctl", "init", "systemd-tmpfiles"})
 
 
-def derive_policy(trace: TraceJson, *, probe_base: str = "ubuntu:24.04") -> PolicyJson:
+def derive_policy(
+    trace: TraceJson,
+    *,
+    probe_base: str = "ubuntu:24.04",
+    warnings: list[str] | None = None,
+) -> PolicyJson:
     """Turn a normalized TraceJson into a PolicyJson the M4 generator can consume."""
     runtime = trace.runtime
 
@@ -55,6 +60,7 @@ def derive_policy(trace: TraceJson, *, probe_base: str = "ubuntu:24.04") -> Poli
             seccomp_syscalls=runtime.syscalls,
             read_only_rootfs=False,
         ),
+        warnings=warnings or [],
     )
 
 

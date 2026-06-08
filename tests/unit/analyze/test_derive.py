@@ -196,3 +196,16 @@ def test_publish_ports_filtered_to_tcp_udp() -> None:
     policy = derive_policy(_make_trace(runtime=runtime))
     protos = sorted(p.proto for p in policy.runtime.publish_ports)
     assert protos == ["tcp", "udp"]
+
+
+def test_derive_policy_forwards_warnings_to_policy() -> None:
+    trace = _make_trace()
+    msgs = ["unknown_rw aggregate: /var/lib/x", "device aggregate: /dev/foo"]
+    policy = derive_policy(trace, warnings=msgs)
+    assert policy.warnings == msgs
+
+
+def test_derive_policy_warnings_defaults_to_empty() -> None:
+    trace = _make_trace()
+    policy = derive_policy(trace)
+    assert policy.warnings == []
