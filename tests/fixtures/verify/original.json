@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "phase_marker_ns": 1000,
+  "marker": "COMPLETE",
+  "install": {
+    "duration_s": 0.0,
+    "exit": null,
+    "paths": [],
+    "ports": [],
+    "outbound": [],
+    "caps": [],
+    "syscalls": [],
+    "execs": []
+  },
+  "runtime": {
+    "duration_s": 1.0,
+    "exit": null,
+    "paths": [
+      {
+        "path": "/var/lib/app",
+        "ops": ["read", "write"],
+        "class": "persistent_rw",
+        "by": ["app"]
+      },
+      {
+        "path": "/etc/resolv.conf",
+        "ops": ["read"],
+        "class": "host_config_ro",
+        "by": ["app"]
+      }
+    ],
+    "ports": [
+      {"port": 8443, "proto": "tcp", "by": "app", "ipv4": true, "ipv6": false}
+    ],
+    "outbound": [],
+    "caps": ["CAP_NET_BIND_SERVICE"],
+    "syscalls": [1, 59],
+    "execs": ["app"]
+  },
+  "warnings": []
+}

@@ -239,6 +239,17 @@ sentinel entrypoint detected — skipping Containerfile and unifi-os.container
 
 The generator writes `Containerfile`, `<name>.container` (a systemd Quadlet unit), `seccomp.json` (OCI-format syscall allowlist), and `README.md` (audit trail) into `<out-dir>`. When the policy's entrypoint is the sentinel `["__UNSET__"]` (no recognizable daemon was traced), the Containerfile and Quadlet are skipped; the seccomp profile and README still ship so you can diff against future runs. See `docs/superpowers/specs/2026-06-07-containerizer-m4-generators.md` for the full contract.
 
+## Scenario 9 — Verify the generated policy
+
+After running `containerizer generate` to produce artifacts, rebuild the image, run it briefly, capture a fresh trace, run `containerizer analyze` on that trace, and then diff the new `trace.json` against the original with `verify`:
+
+```pwsh
+PS> containerizer verify --original .\unifi-analyze\trace.json --observed .\unifi-rerun-analyze\trace.json -o .\unifi-verify\
+verify: 1 new paths, 0 new ports, 0 new caps, 2 new syscalls, 0 new execs
+```
+
+The exit code is 0 if the observed trace's runtime events are a subset of the original's, or 1 if any new events appear. `verify.json` lists exactly what was new in each category so you can decide whether to re-run with a longer interaction or to relax the policy. See `docs/superpowers/specs/2026-06-08-containerizer-m5-verify.md` for the full contract. (Rebuilding + re-tracing the generated container will land in M6's `build` subcommand; for now those steps are manual.)
+
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:
