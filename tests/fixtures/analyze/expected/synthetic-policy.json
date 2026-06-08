@@ -37,7 +37,10 @@
     "caps_drop": [
       "ALL"
     ],
-    "seccomp_syscalls": [],
+    "seccomp_syscalls": [
+      1,
+      59
+    ],
     "read_only_rootfs": false,
     "no_new_privileges": true
   }

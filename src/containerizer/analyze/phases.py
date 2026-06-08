@@ -25,7 +25,10 @@ def split_phases(
       - COMPLETE + phase_marker_ns: events with ts_ns < phase_marker_ns -> install;
         events with ts_ns >= phase_marker_ns -> runtime.
       - COMPLETE without phase_marker_ns: treat all as install (defensive).
-      - An event without a ts_ns field is sent to install.
+      - When ts_ns is missing/non-int, fall back to first_ts_ns (the M2 syscalls
+        collector rolls events up per (pid, syscall_id) and emits first_ts_ns
+        instead of ts_ns — see M2 spec line 149). If both are missing, the
+        event is sent to install.
     """
     if marker == "PARTIAL" or phase_marker_ns is None:
         return list(events), []
@@ -34,6 +37,8 @@ def split_phases(
     runtime: list[dict[str, object]] = []
     for e in events:
         ts = e.get("ts_ns")
+        if not isinstance(ts, int):
+            ts = e.get("first_ts_ns")
         if not isinstance(ts, int):
             install.append(e)
             continue

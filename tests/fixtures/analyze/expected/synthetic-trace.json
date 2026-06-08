@@ -31,11 +31,9 @@
     "outbound": [],
     "caps": [],
     "syscalls": [
-      1,
       59
     ],
     "execs": [
-      "app",
       "setup"
     ]
   },
@@ -77,8 +75,13 @@
     "caps": [
       "CAP_NET_BIND_SERVICE"
     ],
-    "syscalls": [],
-    "execs": []
+    "syscalls": [
+      1,
+      59
+    ],
+    "execs": [
+      "app"
+    ]
   },
   "warnings": [
     "collector connect: .jsonl present but empty",

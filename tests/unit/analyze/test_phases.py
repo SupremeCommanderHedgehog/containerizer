@@ -45,3 +45,16 @@ def test_event_without_ts_ns_goes_to_install() -> None:
     )
     assert len(install) == 1
     assert runtime == []
+
+
+def test_first_ts_ns_fallback_for_syscalls_collector() -> None:
+    # M2 syscalls.bt emits {pid, comm, syscall_id, count, first_ts_ns} with no
+    # ts_ns field. Phases must bucket on first_ts_ns when ts_ns is absent.
+    events: list[dict[str, object]] = [
+        {"pid": 10, "comm": "setup", "syscall_id": 59, "count": 1, "first_ts_ns": 50},
+        {"pid": 11, "comm": "app", "syscall_id": 1, "count": 100, "first_ts_ns": 1800},
+        {"pid": 12, "comm": "noclock", "syscall_id": 2, "count": 1},
+    ]
+    install, runtime = split_phases(events, phase_marker_ns=1000, marker="COMPLETE")
+    assert [e["comm"] for e in install] == ["setup", "noclock"]
+    assert [e["comm"] for e in runtime] == ["app"]
