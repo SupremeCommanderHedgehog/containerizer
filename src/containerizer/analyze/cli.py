@@ -7,7 +7,7 @@ from pathlib import Path
 import click
 
 from containerizer.analyze.caps import aggregate_caps
-from containerizer.analyze.derive import derive_policy
+from containerizer.analyze.derive import SENTINEL_ENTRYPOINT, derive_policy, systemd_required_for
 from containerizer.analyze.execs import aggregate_execs
 from containerizer.analyze.paths import classify_runtime
 from containerizer.analyze.phases import split_phases
@@ -16,6 +16,8 @@ from containerizer.analyze.reader import TraceBundle, read_trace_dir
 from containerizer.analyze.schema import TraceJson, TracePhase
 from containerizer.analyze.syscalls import aggregate_syscalls
 from containerizer.analyze.writer import write_policy_json, write_trace_json
+
+SENTINEL_WARNING = f"entrypoint is sentinel [{SENTINEL_ENTRYPOINT!r}]; M4 must refuse this policy"
 
 
 @click.command("analyze")
@@ -85,10 +87,27 @@ def _assemble_trace_json(bundle: TraceBundle) -> TraceJson:
         execs=aggregate_execs(sys_runtime),
     )
 
-    return TraceJson(
+    # Spec §5.7: warn per unknown_rw / device aggregate so the operator can
+    # audit them before promoting to a runtime policy.
+    for path in runtime.paths:
+        if path.class_ == "unknown_rw":
+            warnings.append(f"unknown_rw aggregate: {path.path}")
+        elif path.class_ == "device":
+            warnings.append(f"device aggregate: {path.path}")
+
+    # Spec §5.7: if no recognizable daemon exec was seen, the entrypoint
+    # falls back to the __UNSET__ sentinel. Surface that decision as a
+    # warning so M4 can refuse the policy with a clear breadcrumb. Build a
+    # provisional TraceJson so the same predicate derive_policy uses can
+    # decide — keeps the truth table in one place (derive.systemd_required_for).
+    provisional = TraceJson(
         phase_marker_ns=bundle.phase_marker_ns,
         marker=bundle.marker,
         install=install,
         runtime=runtime,
         warnings=warnings,
     )
+    if not systemd_required_for(provisional):
+        warnings.append(SENTINEL_WARNING)
+        return provisional.model_copy(update={"warnings": warnings})
+    return provisional

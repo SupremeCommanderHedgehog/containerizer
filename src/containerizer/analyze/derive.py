@@ -34,7 +34,7 @@ def derive_policy(trace: TraceJson, *, probe_base: str = "ubuntu:24.04") -> Poli
         if p.proto in ("tcp", "udp")
     ]
 
-    systemd_required = _systemd_required(trace)
+    systemd_required = systemd_required_for(trace)
     entrypoint = ["/sbin/init"] if systemd_required else [SENTINEL_ENTRYPOINT]
 
     return PolicyJson(
@@ -91,7 +91,12 @@ def _derive_volumes(persistent_paths: list[TracePath]) -> list[PolicyVolume]:
     return out
 
 
-def _systemd_required(trace: TraceJson) -> bool:
+def systemd_required_for(trace: TraceJson) -> bool:
+    """True if the trace implies a systemd-managed daemon (spec §5.5).
+
+    Public so callers (e.g., the cli warning surface) can compute the same
+    truth value derive_policy uses, without depending on a private name.
+    """
     runtime_execs = set(trace.runtime.execs)
     if runtime_execs & SYSTEMD_COMMS:
         return True
