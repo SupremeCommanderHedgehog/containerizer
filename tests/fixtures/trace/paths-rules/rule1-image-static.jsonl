@@ -1,0 +1,3 @@
+# expected: [{"path":"/opt/unifi","ops":["read"],"class":"image_static","by":["unifi"]}]
+{"ts_ns":1,"pid":1,"comm":"unifi","path":"/opt/unifi/lib/server.jar","flags":0,"mode":0,"ret":3}
+{"ts_ns":2,"pid":1,"comm":"unifi","path":"/opt/unifi/config/system.properties","flags":0,"mode":0,"ret":4}

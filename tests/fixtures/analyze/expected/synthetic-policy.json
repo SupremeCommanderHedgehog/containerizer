@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "image": {
+    "base": "ubuntu:24.04",
+    "apt_packages": [],
+    "installer_path": "/installer",
+    "post_install_cleanup": [
+      "/var/cache/apt/archives/*",
+      "/installer"
+    ],
+    "systemd_required": false,
+    "entrypoint": [
+      "__UNSET__"
+    ]
+  },
+  "runtime": {
+    "volumes": [
+      {
+        "name": "app-data",
+        "mount": "/var/lib/app"
+      }
+    ],
+    "tmpfs": [],
+    "binds_ro": [
+      "/etc/resolv.conf"
+    ],
+    "publish_ports": [
+      {
+        "host": 7777,
+        "container": 7777,
+        "proto": "tcp"
+      }
+    ],
+    "caps_add": [
+      "CAP_NET_BIND_SERVICE"
+    ],
+    "caps_drop": [
+      "ALL"
+    ],
+    "seccomp_syscalls": [
+      1,
+      59
+    ],
+    "read_only_rootfs": false,
+    "no_new_privileges": true
+  }
+}

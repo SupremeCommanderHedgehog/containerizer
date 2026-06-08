@@ -1,0 +1,4 @@
+{"ts_ns":100,"pid":10,"comm":"setup","path":"/var/lib/app/init.db","flags":65,"mode":420,"ret":3}
+{"ts_ns":200,"pid":10,"comm":"setup","path":"/etc/resolv.conf","flags":0,"mode":0,"ret":4}
+{"ts_ns":2000,"pid":11,"comm":"app","path":"/var/lib/app/state.db","flags":2,"mode":420,"ret":5}
+{"ts_ns":2100,"pid":11,"comm":"app","path":"/etc/resolv.conf","flags":0,"mode":0,"ret":6}
