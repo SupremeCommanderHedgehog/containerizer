@@ -38,7 +38,7 @@ def analyze_cmd(trace_dir: Path, output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     bundle = read_trace_dir(trace_dir)
     trace = _assemble_trace_json(bundle)
-    policy = derive_policy(trace)
+    policy = derive_policy(trace, warnings=list(trace.warnings))
     write_trace_json(trace, output_dir / "trace.json")
     write_policy_json(policy, output_dir / "policy.json")
     click.echo(f"wrote {output_dir / 'trace.json'} and {output_dir / 'policy.json'}")
