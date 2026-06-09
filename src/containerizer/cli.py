@@ -8,6 +8,7 @@ import click
 
 from containerizer import __version__
 from containerizer.analyze.cli import analyze_cmd
+from containerizer.build.cli import build_cmd
 from containerizer.generate.cli import generate_cmd
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
@@ -50,6 +51,7 @@ main.add_command(trace_cmd)
 main.add_command(analyze_cmd)
 main.add_command(generate_cmd)
 main.add_command(verify_cmd)
+main.add_command(build_cmd)
 
 
 if __name__ == "__main__":
