@@ -100,3 +100,76 @@ def test_run_calls_subprocess_with_argv(mock_run: MagicMock, tmp_path: Path) -> 
     )
     assert runner.run() == 0
     mock_run.assert_called_once_with(runner.argv(), check=False)
+
+
+def test_verify_mode_argv_includes_image_tar_and_env_vars(tmp_path: Path) -> None:
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"x")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}", encoding="utf-8")
+    out = tmp_path / "verify-trace"
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=None,
+        output_dir=out,
+        mode="verify",
+        verify_image_tar=image_tar,
+        verify_image_tag="demo:m6-verify",
+        verify_run_flags=("--cap-drop=ALL", "--read-only"),
+        verify_soak_seconds=15,
+        verify_seccomp_path=seccomp,
+    )
+    argv = runner.argv()
+
+    assert "--mode" in argv
+    assert "verify" in argv
+    assert f"{image_tar.resolve()}:/work/verify/image.tar:ro" in argv
+    assert f"{seccomp.resolve()}:/work/verify/seccomp.json:ro" in argv
+    assert any(a == "VERIFY_IMAGE_TAG=demo:m6-verify" for a in argv)
+    assert any(a == "VERIFY_SOAK_SECONDS=15" for a in argv)
+    # VERIFY_RUN_FLAGS is one env var carrying the whole arg list, space-joined.
+    assert any(a.startswith("VERIFY_RUN_FLAGS=--cap-drop=ALL --read-only") for a in argv)
+    # Verify mode does not run interactively.
+    assert "-i" not in argv
+    # The original /installer mount is NOT present in verify mode.
+    assert not any(":/installer:" in a for a in argv)
+
+
+def test_install_mode_unchanged(tmp_path: Path) -> None:
+    installer = tmp_path / "installer.sh"
+    installer.write_text("echo hi", encoding="utf-8")
+    out = tmp_path / "install-trace"
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=out,
+    )
+    argv = runner.argv()
+    # Default mode is "install"; behavior must be byte-identical to M2.
+    assert "-i" in argv
+    assert any(":/installer:ro" in a for a in argv)
+    assert "--mode" not in argv  # not passed in install mode
+
+
+def test_verify_mode_validates_required_fields(tmp_path: Path) -> None:
+    out = tmp_path / "vt"
+    with pytest.raises(ValueError, match="verify mode requires"):
+        TraceRunner(
+            image_tag="runner:latest",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            # missing verify_* fields
+        )
+
+
+def test_install_mode_validates_installer_present(tmp_path: Path) -> None:
+    out = tmp_path / "it"
+    with pytest.raises(ValueError, match="install mode requires installer"):
+        TraceRunner(
+            image_tag="runner:latest",
+            installer=None,
+            output_dir=out,
+        )
