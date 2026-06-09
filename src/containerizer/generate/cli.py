@@ -6,13 +6,9 @@ from pathlib import Path
 
 import click
 
+from containerizer.analyze.derive import SENTINEL_ENTRYPOINT
 from containerizer.analyze.schema import PolicyJson
-from containerizer.generate.containerfile import render_containerfile
-from containerizer.generate.quadlet import render_quadlet
-from containerizer.generate.readme import render_readme
-from containerizer.generate.seccomp import render_seccomp
-
-SENTINEL_ENTRYPOINT = "__UNSET__"
+from containerizer.generate.orchestrator import generate_all
 
 
 @click.command("generate")
@@ -35,23 +31,13 @@ SENTINEL_ENTRYPOINT = "__UNSET__"
 )
 def generate_cmd(policy_path: Path, name: str, output_dir: Path) -> None:
     """Render Containerfile + Quadlet + seccomp + README from POLICY_PATH."""
-    output_dir.mkdir(parents=True, exist_ok=True)
     policy = PolicyJson.model_validate_json(policy_path.read_text(encoding="utf-8"))
     sentinel = policy.image.entrypoint == [SENTINEL_ENTRYPOINT]
 
-    seccomp_bytes, unknown_ids = render_seccomp(policy)
-    (output_dir / "seccomp.json").write_bytes(seccomp_bytes)
-
-    readme = render_readme(policy, name, skipped=sentinel, unknown_syscall_ids=unknown_ids)
-    (output_dir / "README.md").write_text(readme, encoding="utf-8")
+    unknown_ids = generate_all(policy, name, output_dir)
 
     if sentinel:
         click.echo(f"sentinel entrypoint detected — skipping Containerfile and {name}.container")
-    else:
-        (output_dir / "Containerfile").write_text(render_containerfile(policy), encoding="utf-8")
-        (output_dir / f"{name}.container").write_text(
-            render_quadlet(policy, name), encoding="utf-8"
-        )
 
     if unknown_ids:
         click.echo(
