@@ -1,0 +1,418 @@
+"""run_pipeline composition tests with fakes injected via the §5.6 seam."""
+
+from __future__ import annotations
+
+import io
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+
+import pytest
+
+from containerizer.analyze.derive import SENTINEL_ENTRYPOINT
+from containerizer.analyze.schema import (
+    PolicyImage,
+    PolicyJson,
+    PolicyRuntime,
+    TraceJson,
+    TracePhase,
+)
+from containerizer.build.config import BuildConfig
+from containerizer.build.paths import PathLayout, resolve_layout
+from containerizer.build.pipeline import PipelineError, run_pipeline
+from containerizer.probe.schema import (
+    BaseImageSuggestion,
+    ElfProbe,
+    InstallerKind,
+    ProbeResult,
+)
+from containerizer.verify.schema import VerifyDiff, VerifyReport
+
+
+def _trace_json(marker: str = "COMPLETE") -> TraceJson:
+    empty = TracePhase(
+        duration_s=0.0,
+        paths=[],
+        ports=[],
+        outbound=[],
+        caps=[],
+        syscalls=[],
+        execs=[],
+    )
+    return TraceJson(
+        phase_marker_ns=1,
+        marker=marker,  # type: ignore[arg-type]
+        install=empty,
+        runtime=empty,
+        warnings=[],
+    )
+
+
+def _policy(entrypoint: list[str]) -> PolicyJson:
+    return PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            apt_packages=[],
+            post_install_cleanup=[],
+            systemd_required=True,
+            entrypoint=entrypoint,
+        ),
+        runtime=PolicyRuntime(
+            volumes=[],
+            tmpfs=[],
+            binds_ro=[],
+            publish_ports=[],
+            caps_add=[],
+            seccomp_syscalls=[],
+            read_only_rootfs=False,
+        ),
+    )
+
+
+def _empty_verify_report() -> VerifyReport:
+    return VerifyReport(
+        original_marker="COMPLETE",
+        observed_marker="COMPLETE",
+        diff=VerifyDiff(new_paths=[], new_ports=[], new_caps=[], new_syscalls=[], new_execs=[]),
+    )
+
+
+def _probe_result() -> ProbeResult:
+    return ProbeResult(
+        kind=InstallerKind.elf,
+        arch="x86_64",
+        elf=ElfProbe(
+            arch="x86_64",
+            bit=64,
+            endianness="little",
+            interpreter="/lib64/ld-linux-x86-64.so.2",
+            is_static=False,
+            needed_libs=[],
+            glibc_min="2.35",
+        ),
+        base_image=BaseImageSuggestion(image="ubuntu:24.04", reasons=["x86_64 + glibc 2.35"]),
+    )
+
+
+@dataclass
+class Calls:
+    order: list[str]
+
+
+def _probe(c: Calls) -> Callable[[Path, str | None], ProbeResult]:
+    def fn(installer: Path, base_image: str | None) -> ProbeResult:
+        c.order.append("probe")
+        return _probe_result()
+
+    return fn
+
+
+def _install_trace_writing_complete(
+    c: Calls, layout: PathLayout
+) -> Callable[[Path, str | None, Path], int]:
+    def fn(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+        c.order.append("install_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "COMPLETE").write_text("", encoding="utf-8")
+        return 0
+
+    return fn
+
+
+def _parse_trace(c: Calls) -> Callable[[Path], TraceJson]:
+    def fn(trace_dir: Path) -> TraceJson:
+        c.order.append(f"parse_trace:{trace_dir.name}")
+        return _trace_json()
+
+    return fn
+
+
+def _derive_policy(c: Calls, policy: PolicyJson) -> Callable[[TraceJson], PolicyJson]:
+    def fn(trace: TraceJson) -> PolicyJson:
+        c.order.append("derive_policy")
+        return policy
+
+    return fn
+
+
+def _generate(c: Calls, layout: PathLayout) -> Callable[[PolicyJson, str, Path], None]:
+    def fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
+        c.order.append("generate")
+        final_dir.mkdir(parents=True, exist_ok=True)
+        (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
+        (final_dir / f"{name}.container").write_text("[Container]\n", encoding="utf-8")
+        (final_dir / "seccomp.json").write_text("{}\n", encoding="utf-8")
+        (final_dir / "README.md").write_text(
+            "# Containerizer output for demo\n\n## Next steps\n\n(...)\n",
+            encoding="utf-8",
+        )
+
+    return fn
+
+
+def _podman_build(c: Calls, layout: PathLayout) -> Callable[[Path, str], Path]:
+    def fn(final_dir: Path, image_tag: str) -> Path:
+        c.order.append("podman_build")
+        layout.verify_image_tar.parent.mkdir(parents=True, exist_ok=True)
+        layout.verify_image_tar.write_bytes(b"fake-tarball")
+        return layout.verify_image_tar
+
+    return fn
+
+
+def _verify_trace_writing_complete(
+    c: Calls,
+) -> Callable[[Path, list[str], str, int, Path], int]:
+    def fn(
+        image_tar: Path,
+        run_flags: list[str],
+        image_tag: str,
+        soak_seconds: int,
+        output_dir: Path,
+    ) -> int:
+        c.order.append("verify_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "COMPLETE").write_text("", encoding="utf-8")
+        return 0
+
+    return fn
+
+
+def _diff(c: Calls) -> Callable[[TraceJson, TraceJson], VerifyReport]:
+    def fn(original: TraceJson, observed: TraceJson) -> VerifyReport:
+        c.order.append("diff")
+        return _empty_verify_report()
+
+    return fn
+
+
+def _build_layout(tmp_path: Path) -> PathLayout:
+    return resolve_layout(
+        tmp_path / "out",
+        "demo",
+        intermediates_root=tmp_path / "inter",
+        keep_intermediates=False,
+    )
+
+
+def _cfg(tmp_path: Path, **overrides: object) -> BuildConfig:
+    base: dict[str, object] = dict(
+        installer=tmp_path / "installer.bin",
+        name="demo",
+        out_dir=tmp_path / "out",
+    )
+    base.update(overrides)
+    return BuildConfig(**base)  # type: ignore[arg-type]
+
+
+def test_happy_path_invokes_all_phases_in_order(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    result = run_pipeline(
+        _cfg(tmp_path),
+        probe_fn=_probe(calls),
+        install_trace_fn=_install_trace_writing_complete(calls, layout),
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+
+    assert calls.order == [
+        "probe",
+        "install_trace",
+        "parse_trace:original",
+        "derive_policy",
+        "generate",
+        "podman_build",
+        "verify_trace",
+        "parse_trace:verify",
+        "diff",
+    ]
+    assert result.verify is not None
+    assert result.skip_reason is None
+    assert layout.final_verify_json.exists()
+    assert layout.final_readme.read_text(encoding="utf-8").find("## Verify results") != -1
+
+
+def test_sentinel_skip_short_circuits_after_generate(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    result = run_pipeline(
+        _cfg(tmp_path),
+        probe_fn=_probe(calls),
+        install_trace_fn=_install_trace_writing_complete(calls, layout),
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy([SENTINEL_ENTRYPOINT])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+
+    assert "podman_build" not in calls.order
+    assert "verify_trace" not in calls.order
+    assert "diff" not in calls.order
+    assert result.skip_reason == "sentinel"
+    assert result.verify is None
+    assert not layout.final_verify_json.exists()
+    readme = layout.final_readme.read_text(encoding="utf-8")
+    assert "Verify skipped: no entrypoint detected" in readme
+
+
+def test_skip_verify_flag_short_circuits_after_generate(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    result = run_pipeline(
+        _cfg(tmp_path, skip_verify=True),
+        probe_fn=_probe(calls),
+        install_trace_fn=_install_trace_writing_complete(calls, layout),
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+
+    assert "podman_build" not in calls.order
+    assert result.skip_reason == "flag"
+    assert "Verify skipped: `--skip-verify` was set." in layout.final_readme.read_text(
+        encoding="utf-8"
+    )
+
+
+def test_install_trace_neither_complete_nor_partial_raises(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def install_no_marker(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+        calls.order.append("install_trace")
+        layout.trace_original_dir.mkdir(parents=True, exist_ok=True)
+        return 1
+
+    with pytest.raises(PipelineError, match="trace did not finalise"):
+        run_pipeline(
+            _cfg(tmp_path),
+            probe_fn=_probe(calls),
+            install_trace_fn=install_no_marker,
+            parse_trace_fn=_parse_trace(calls),
+            derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+            generate_fn=_generate(calls, layout),
+            podman_build_fn=_podman_build(calls, layout),
+            verify_trace_fn=_verify_trace_writing_complete(calls),
+            diff_fn=_diff(calls),
+            layout=layout,
+            stderr=io.StringIO(),
+        )
+
+
+def test_install_trace_partial_marker_emits_warning(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def install_partial(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+        calls.order.append("install_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "PARTIAL").write_text("", encoding="utf-8")
+        return 0
+
+    result = run_pipeline(
+        _cfg(tmp_path),
+        probe_fn=_probe(calls),
+        install_trace_fn=install_partial,
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+    assert any("PARTIAL" in w for w in result.warnings)
+
+
+def test_verify_trace_ready_failed_raises(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def ready_failed(
+        image_tar: Path,
+        run_flags: list[str],
+        image_tag: str,
+        soak_seconds: int,
+        output_dir: Path,
+    ) -> int:
+        calls.order.append("verify_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "READY_FAILED").write_text("", encoding="utf-8")
+        return 1
+
+    with pytest.raises(PipelineError, match="failed to come up"):
+        run_pipeline(
+            _cfg(tmp_path),
+            probe_fn=_probe(calls),
+            install_trace_fn=_install_trace_writing_complete(calls, layout),
+            parse_trace_fn=_parse_trace(calls),
+            derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+            generate_fn=_generate(calls, layout),
+            podman_build_fn=_podman_build(calls, layout),
+            verify_trace_fn=ready_failed,
+            diff_fn=_diff(calls),
+            layout=layout,
+            stderr=io.StringIO(),
+        )
+
+
+def test_verify_trace_ran_and_died_continues_with_warning(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def died(
+        image_tar: Path,
+        run_flags: list[str],
+        image_tag: str,
+        soak_seconds: int,
+        output_dir: Path,
+    ) -> int:
+        calls.order.append("verify_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "RAN_AND_DIED").write_text("", encoding="utf-8")
+        (output_dir / "COMPLETE").write_text("", encoding="utf-8")
+        return 0
+
+    result = run_pipeline(
+        _cfg(tmp_path),
+        probe_fn=_probe(calls),
+        install_trace_fn=_install_trace_writing_complete(calls, layout),
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=died,
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+    assert result.verify is not None
+    assert any("RAN_AND_DIED" in w or "exited during soak" in w for w in result.warnings)
+    assert "diff" in calls.order
