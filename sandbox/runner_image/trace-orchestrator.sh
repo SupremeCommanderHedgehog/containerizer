@@ -18,12 +18,36 @@
 #   5. On SIGINT   -> finalise PARTIAL
 set -euo pipefail
 
-INSTALLER="${1:?usage: trace-orchestrator <installer-path>}"
+# M6: optional --mode {install,verify}. Default is install (M2 behavior).
+MODE="install"
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --mode)
+            MODE="${2:?--mode requires an argument}"
+            shift 2
+            ;;
+        --mode=*)
+            MODE="${1#--mode=}"
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+case "$MODE" in
+    install|verify) ;;
+    *) echo "trace-orchestrator: unknown --mode $MODE" >&2; exit 64 ;;
+esac
+
 TRACE_DIR="/work/trace"
 
-if [[ ! -r "$INSTALLER" ]]; then
-    echo "trace-orchestrator: installer not readable: $INSTALLER" >&2
-    exit 2
+if [[ "$MODE" == "install" ]]; then
+    INSTALLER="${1:?usage: trace-orchestrator [--mode install] <installer-path>}"
+    if [[ ! -r "$INSTALLER" ]]; then
+        echo "trace-orchestrator: installer not readable: $INSTALLER" >&2
+        exit 2
+    fi
 fi
 
 mkdir -p "$TRACE_DIR"
@@ -119,39 +143,59 @@ done
     printf "}\n"
 } > "$TRACE_DIR/FALLBACKS.json"
 
-echo "trace-orchestrator: running installer $INSTALLER" >&2
+if [[ "$MODE" == "install" ]]; then
+    # ---- existing M2 install-mode workload ----
+    echo "trace-orchestrator: running installer $INSTALLER" >&2
 
-# Run installer in the background with stdout+stderr captured via a process-
-# substitution fd, so $! is the installer's pid (not tee's).
-exec 3> >(tee "$TRACE_DIR/install.log")
-"$INSTALLER" >&3 2>&3 &
-installer_pid="$!"
-exec 3>&-
+    # Run installer in the background with stdout+stderr captured via a process-
+    # substitution fd, so $! is the installer's pid (not tee's).
+    exec 3> >(tee "$TRACE_DIR/install.log")
+    "$INSTALLER" >&3 2>&3 &
+    installer_pid="$!"
+    exec 3>&-
 
-# Spawn one strace per failed collector, targeting the installer pid. Each
-# strace exits when the traced process does.
-for name in "${!fallbacks[@]}"; do
-    # shellcheck disable=SC2086  # we WANT word splitting on "${domain[$name]}"
-    strace -f -o "$TRACE_DIR/$name.fallback.log" ${domain[$name]} -p "$installer_pid" 2>/dev/null &
-    collector_pids+=("$!")
-done
+    # Spawn one strace per failed collector, targeting the installer pid. Each
+    # strace exits when the traced process does.
+    for name in "${!fallbacks[@]}"; do
+        # shellcheck disable=SC2086  # we WANT word splitting on "${domain[$name]}"
+        strace -f -o "$TRACE_DIR/$name.fallback.log" ${domain[$name]} -p "$installer_pid" 2>/dev/null &
+        collector_pids+=("$!")
+    done
 
-install_rc=0
-wait "$installer_pid" || install_rc=$?
-echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
+    install_rc=0
+    wait "$installer_pid" || install_rc=$?
+    echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
-if (( install_rc != 0 )); then
-    echo "failed" > "$TRACE_DIR/install.status"
-    echo "trace-orchestrator: installer exited non-zero ($install_rc); finalising PARTIAL" >&2
-    finalize_marker PARTIAL
-    exit 0
+    if (( install_rc != 0 )); then
+        echo "failed" > "$TRACE_DIR/install.status"
+        echo "trace-orchestrator: installer exited non-zero ($install_rc); finalising PARTIAL" >&2
+        finalize_marker PARTIAL
+        exit 0
+    fi
+    awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
+        > "$TRACE_DIR/PHASE_MARKER"
+
+    echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
+
+    # read returns non-zero on EOF; we treat both Enter and EOF as the COMPLETE path.
+    read -r _ || true
+    finalize_marker COMPLETE
+    echo "trace-orchestrator: COMPLETE" >&2
+else
+    # ---- M6 verify-mode workload ----
+    echo "trace-orchestrator: dispatching to verify-orchestrator (mode=verify)" >&2
+    /usr/local/bin/verify-orchestrator.sh
+    # verify-orchestrator wrote its own markers (PHASE_MARKER + a final
+    # LOAD_FAILED/READY_FAILED/RAN_AND_DIED/COMPLETE). Stop the collectors so
+    # their JSONL is flushed; do NOT write an extra marker.
+    if (( ${#collector_pids[@]} > 0 )); then
+        for pid in "${collector_pids[@]}"; do
+            kill -TERM "$pid" 2>/dev/null || true
+        done
+        sleep 1
+        for pid in "${collector_pids[@]}"; do
+            kill -KILL "$pid" 2>/dev/null || true
+        done
+    fi
+    echo "trace-orchestrator: verify mode complete" >&2
 fi
-awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
-    > "$TRACE_DIR/PHASE_MARKER"
-
-echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
-
-# read returns non-zero on EOF; we treat both Enter and EOF as the COMPLETE path.
-read -r _ || true
-finalize_marker COMPLETE
-echo "trace-orchestrator: COMPLETE" >&2
