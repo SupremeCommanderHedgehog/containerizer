@@ -250,6 +250,103 @@ verify: 1 new paths, 0 new ports, 0 new caps, 2 new syscalls, 0 new execs
 
 The exit code is 0 if the observed trace's runtime events are a subset of the original's, or 1 if any new events appear. `verify.json` lists exactly what was new in each category so you can decide whether to re-run with a longer interaction or to relax the policy. See `docs/superpowers/specs/2026-06-08-containerizer-m5-verify.md` for the full contract. (Rebuilding + re-tracing the generated container will land in M6's `build` subcommand; for now those steps are manual.)
 
+## Scenario 10 — Synthetic installer end-to-end through `build`
+
+**Goal:** Validate the M6 `build` pipeline against a real Podman machine
+without exercising the real UniFi installer.
+
+**Prerequisites:** A running Podman machine on Linux/macOS/Windows. At
+least 10 GB free in the machine. A small ELF or shell-script installer
+that runs in under a few seconds (an idempotent install + a simple
+daemon that binds a port). If you don't already have one, the same
+synthetic test installer referenced by `tests/integration/trace/` will
+do.
+
+**Procedure:**
+
+```pwsh
+# 1. Fresh out-dir
+Remove-Item -Recurse -Force .\out\synthetic -ErrorAction SilentlyContinue
+
+# 2. Run build with intermediates kept so the trace artifacts are inspectable.
+containerizer build .\path\to\synthetic.sh `
+    --name synthetic `
+    --verify-soak-seconds 15 `
+    --keep-intermediates `
+    --debug
+```
+
+**Expected:**
+
+- `[probe]` line within 1s.
+- `[trace]` lines stream as collectors start and the installer runs.
+- An interactive prompt: "exercise the software, then press <Enter> here to finalise".
+- After Enter: `[analyze]`, `[generate]`, `[build]`, `[verify]` lines.
+- Exit 0.
+- `out/synthetic/` contains `Containerfile`, `synthetic.container`,
+  `seccomp.json`, `README.md`, `verify.json`.
+- `out/synthetic/.intermediates/trace/verify/COMPLETE` exists.
+- `README.md` has a `## Verify results` section.
+
+**Common failure modes:**
+
+- "podman not found" → check `$env:PATH`; install podman.
+- "no podman machine is running" → run `podman machine start`.
+- "podman build failed" → inspect `out/synthetic/Containerfile` and the
+  build log under `.intermediates/`.
+- "generated container failed to come up under strict policy" → the
+  verify retrace's `READY_FAILED` marker fired. Look at
+  `.intermediates/verify/target.err` and the collector JSONL under
+  `.intermediates/trace/verify/` for syscall denials.
+
+## Scenario 11 — UniFi installer end-to-end through `build`
+
+**Goal:** Run the real UniFi OS Server installer end-to-end. Closes the
+design §11 open question about classifier rules at real-installer scale.
+
+**Prerequisites:** Same as scenario 10 plus the UniFi installer binary
+(~875 MB; not committed to the repo). At least 30 GB free in the
+podman machine. A web browser to exercise the admin UI during the
+trace's interactive smoke phase.
+
+**Procedure:**
+
+```pwsh
+containerizer build .\unifi-installer.bin `
+    --name unifi-os `
+    --keep-intermediates `
+    --verify-soak-seconds 60
+```
+
+**Expected:**
+
+- `[trace]` shows the installer running for several minutes (UniFi
+  installs MongoDB + JVM + the controller).
+- Interactive prompt; exercise the admin UI on `https://localhost:8443`
+  briefly (load the dashboard, navigate a few pages), then press Enter.
+- Build succeeds; `[verify]` produces either "no new events" or a small
+  diff. Either is acceptable for v0.1.0.
+- `out/unifi-os/` contains the full final-artifact set.
+- The README's `## Verify results` section enumerates any deltas for
+  triage; widen `policy.json` by hand and re-run `build` if needed.
+
+**What success looks like for the milestone:** The container starts under
+the Quadlet without manual fixup; the admin UI responds; restarting the
+unit preserves state via the named volume.
+
+**Common failure modes:**
+
+- Trace volume too large (UniFi + MongoDB + JVM can produce hundreds of
+  MB of JSONL). If the analyze phase OOMs, set
+  `CONTAINERIZER_TRACE_DIR=/scratch` or similar on a larger filesystem.
+- Daemon doesn't bind a port within 30s of installer-complete: the
+  trace orchestrator's daemon-ready detection times out and the smoke
+  test runs in degraded mode. Press Enter sooner and rely on the
+  follow-up `verify` pass to validate.
+- Classifier produces `unknown_rw` aggregates: these get surfaced in
+  README's audit trail. Triage them manually; consider adding rules to
+  `src/containerizer/analyze/paths.py` if a pattern emerges.
+
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:
