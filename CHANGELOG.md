@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.4.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.3.0...v0.4.0) (2026-06-09)
+
+
+### Features
+
+* **analyze:** M3 analyzer + policy derivation ([#80](https://github.com/SupremeCommanderHedgehog/containerizer/issues/80)) ([7cfd1fa](https://github.com/SupremeCommanderHedgehog/containerizer/commit/7cfd1fa4d5a2c34652d917997d1f0693f5a153e0))
+* **build:** M6 build subcommand end-to-end orchestrator ([#86](https://github.com/SupremeCommanderHedgehog/containerizer/issues/86)) ([4ab3873](https://github.com/SupremeCommanderHedgehog/containerizer/commit/4ab3873b9ae38e15bfa027b30e7c1a174094ccb0))
+* **generate:** M4 generators (Containerfile + Quadlet + seccomp + README) ([#82](https://github.com/SupremeCommanderHedgehog/containerizer/issues/82)) ([44901b4](https://github.com/SupremeCommanderHedgehog/containerizer/commit/44901b44ce801d5e173f76989c4e57ee55404e83))
+* **verify:** M5 verify (diff-only) ([#84](https://github.com/SupremeCommanderHedgehog/containerizer/issues/84)) ([8410197](https://github.com/SupremeCommanderHedgehog/containerizer/commit/8410197de7ff50f2474af283eb675fa0dea4a5e6))
+
+
+### Bug Fixes
+
+* **sandbox/collectors:** drop stray BEGIN printf opener from .bt files ([#70](https://github.com/SupremeCommanderHedgehog/containerizer/issues/70)) ([78aecdd](https://github.com/SupremeCommanderHedgehog/containerizer/commit/78aecdd3b4b3715925e6fae450cbc8072592a4ad)), closes [#58](https://github.com/SupremeCommanderHedgehog/containerizer/issues/58)
+* **sandbox/collectors:** key bind.bt proto map by (pid&lt;&lt;32 | fd) instead of tid ([#71](https://github.com/SupremeCommanderHedgehog/containerizer/issues/71)) ([664c594](https://github.com/SupremeCommanderHedgehog/containerizer/commit/664c594b18c39c0380b84790179711ef8ab8c919)), closes [#52](https://github.com/SupremeCommanderHedgehog/containerizer/issues/52)
+* **sandbox:** kernel-headers in runner image + 15s grace for bcc compile ([#76](https://github.com/SupremeCommanderHedgehog/containerizer/issues/76)) ([87d05ee](https://github.com/SupremeCommanderHedgehog/containerizer/commit/87d05eeb932543919dbb0383011157cbd0500e21))
+* **sandbox:** replace bcc tcpconnect/tcpaccept with bpftrace ([#77](https://github.com/SupremeCommanderHedgehog/containerizer/issues/77)) ([#78](https://github.com/SupremeCommanderHedgehog/containerizer/issues/78)) ([0d11f14](https://github.com/SupremeCommanderHedgehog/containerizer/commit/0d11f14203f82b2a39ddf844259e569bf0e4531b))
+* **trace:** bind-mount kernel tracefs + headers + CI rootful podman ([#74](https://github.com/SupremeCommanderHedgehog/containerizer/issues/74)) ([716740e](https://github.com/SupremeCommanderHedgehog/containerizer/commit/716740e82cf49f0dc7c9a3e521adb549c0acde52))
+
+
+### Documentation
+
+* **m3:** analyzer + policy derivation spec + implementation plan ([#79](https://github.com/SupremeCommanderHedgehog/containerizer/issues/79)) ([122df45](https://github.com/SupremeCommanderHedgehog/containerizer/commit/122df451c84bf9df30e12a62a31838d306aacdf8))
+* **m4:** spec + implementation plan for generators ([#81](https://github.com/SupremeCommanderHedgehog/containerizer/issues/81)) ([d1add90](https://github.com/SupremeCommanderHedgehog/containerizer/commit/d1add903bf801315090dda486a2c86c357bb867d))
+* **m5:** spec + implementation plan for verify ([#83](https://github.com/SupremeCommanderHedgehog/containerizer/issues/83)) ([fff07d1](https://github.com/SupremeCommanderHedgehog/containerizer/commit/fff07d1fc19890b548fe2eabe41c27583a0a5559))
+* **m6:** spec + implementation plan for build subcommand ([#85](https://github.com/SupremeCommanderHedgehog/containerizer/issues/85)) ([7f7dcc1](https://github.com/SupremeCommanderHedgehog/containerizer/commit/7f7dcc1e282af64a0b908c7ffb184e1768e31beb))
+* **plan:** add M2 sandbox + trace implementation plan ([#46](https://github.com/SupremeCommanderHedgehog/containerizer/issues/46)) ([7ba3bd3](https://github.com/SupremeCommanderHedgehog/containerizer/commit/7ba3bd3209b0a1c2f3836c1c60dd6c710e275668))
+* **spec:** add M2 sandbox + trace design spec ([#45](https://github.com/SupremeCommanderHedgehog/containerizer/issues/45)) ([d540fc4](https://github.com/SupremeCommanderHedgehog/containerizer/commit/d540fc4b0e46add0562ed430824a393f509a2be1))
+
 ## [0.3.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.2.1...v0.3.0) (2026-06-07)
 
 
