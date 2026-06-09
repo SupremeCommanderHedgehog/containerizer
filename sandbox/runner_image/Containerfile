@@ -47,4 +47,7 @@ RUN mkdir -p /var/lib/containers \
              /var/lib/shared/vfs-layers && \
     chmod 755 /var/lib/containers
 
+COPY verify-orchestrator.sh /usr/local/bin/verify-orchestrator.sh
+RUN chmod +x /usr/local/bin/verify-orchestrator.sh
+
 ENTRYPOINT ["/opt/containerizer/trace-orchestrator.sh"]

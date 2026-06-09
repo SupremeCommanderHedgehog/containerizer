@@ -184,7 +184,7 @@ if [[ "$MODE" == "install" ]]; then
 else
     # ---- M6 verify-mode workload ----
     echo "trace-orchestrator: dispatching to verify-orchestrator (mode=verify)" >&2
-    /usr/local/bin/verify-orchestrator.sh
+    /usr/local/bin/verify-orchestrator.sh || true
     # verify-orchestrator wrote its own markers (PHASE_MARKER + a final
     # LOAD_FAILED/READY_FAILED/RAN_AND_DIED/COMPLETE). Stop the collectors so
     # their JSONL is flushed; do NOT write an extra marker.
