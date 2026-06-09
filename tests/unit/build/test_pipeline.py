@@ -382,6 +382,104 @@ def test_verify_trace_ready_failed_raises(tmp_path: Path) -> None:
         )
 
 
+def test_verify_trace_load_failed_raises(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def load_failed(
+        image_tar: Path,
+        run_flags: list[str],
+        image_tag: str,
+        soak_seconds: int,
+        output_dir: Path,
+    ) -> int:
+        calls.order.append("verify_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "LOAD_FAILED").write_text("", encoding="utf-8")
+        return 1
+
+    with pytest.raises(PipelineError, match="podman load failed"):
+        run_pipeline(
+            _cfg(tmp_path),
+            probe_fn=_probe(calls),
+            install_trace_fn=_install_trace_writing_complete(calls, layout),
+            parse_trace_fn=_parse_trace(calls),
+            derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+            generate_fn=_generate(calls, layout),
+            podman_build_fn=_podman_build(calls, layout),
+            verify_trace_fn=load_failed,
+            diff_fn=_diff(calls),
+            layout=layout,
+            stderr=io.StringIO(),
+        )
+
+
+def test_verify_trace_no_recognized_marker_raises(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def no_marker(
+        image_tar: Path,
+        run_flags: list[str],
+        image_tag: str,
+        soak_seconds: int,
+        output_dir: Path,
+    ) -> int:
+        calls.order.append("verify_trace")
+        output_dir.mkdir(parents=True, exist_ok=True)
+        # No marker file at all.
+        return 0
+
+    with pytest.raises(PipelineError, match="no recognized marker"):
+        run_pipeline(
+            _cfg(tmp_path),
+            probe_fn=_probe(calls),
+            install_trace_fn=_install_trace_writing_complete(calls, layout),
+            parse_trace_fn=_parse_trace(calls),
+            derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+            generate_fn=_generate(calls, layout),
+            podman_build_fn=_podman_build(calls, layout),
+            verify_trace_fn=no_marker,
+            diff_fn=_diff(calls),
+            layout=layout,
+            stderr=io.StringIO(),
+        )
+
+
+def test_missing_readme_after_generate_raises_clear_error(tmp_path: Path) -> None:
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def generate_without_readme(policy: PolicyJson, name: str, final_dir: Path) -> None:
+        calls.order.append("generate")
+        final_dir.mkdir(parents=True, exist_ok=True)
+        (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
+        (final_dir / f"{name}.container").write_text("[Container]\n", encoding="utf-8")
+        (final_dir / "seccomp.json").write_text("{}\n", encoding="utf-8")
+        # Intentionally do NOT write README.md to exercise the missing-file
+        # path on the post-verify rewrite.
+
+    with pytest.raises(PipelineError, match="README rewrite failed"):
+        run_pipeline(
+            _cfg(tmp_path),
+            probe_fn=_probe(calls),
+            install_trace_fn=_install_trace_writing_complete(calls, layout),
+            parse_trace_fn=_parse_trace(calls),
+            derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+            generate_fn=generate_without_readme,
+            podman_build_fn=_podman_build(calls, layout),
+            verify_trace_fn=_verify_trace_writing_complete(calls),
+            diff_fn=_diff(calls),
+            layout=layout,
+            stderr=io.StringIO(),
+        )
+    # verify.json must still be preserved per spec §7's invariant.
+    assert layout.final_verify_json.exists()
+
+
 def test_verify_trace_ran_and_died_continues_with_warning(tmp_path: Path) -> None:
     calls = Calls(order=[])
     layout = _build_layout(tmp_path)

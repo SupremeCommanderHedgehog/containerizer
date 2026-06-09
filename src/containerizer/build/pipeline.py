@@ -188,6 +188,17 @@ def _rewrite_readme(
     verify: VerifyReport | None,
     skip_reason: Literal["sentinel", "flag"] | None,
 ) -> None:
-    text = path.read_text(encoding="utf-8")
+    # Spec §7: README missing or unparseable -> raise so the caller can
+    # surface "verify.json was written but README rewrite failed". The
+    # generate phase wrote README, so a missing file here means something
+    # external deleted it between phases -- worth a clear error.
+    try:
+        text = path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise PipelineError(
+            f"README rewrite failed: {path} not found. "
+            "verify.json was written but the Verify results section could not be appended; "
+            "rerun build or hand-edit README."
+        ) from exc
     new_text = rewrite_readme_with_verify(text, verify=verify, skip_reason=skip_reason)
     path.write_text(new_text, encoding="utf-8")
