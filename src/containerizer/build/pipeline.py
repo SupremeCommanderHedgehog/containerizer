@@ -75,7 +75,6 @@ def run_pipeline(
 
     # 4a. sentinel
     if policy.image.entrypoint == [SENTINEL_ENTRYPOINT]:
-        _say(stderr, "[verify]   skipped: no entrypoint detected")
         _rewrite_readme(layout.final_readme, verify=None, skip_reason="sentinel")
         return BuildResult(
             final_dir=layout.final_dir,
@@ -87,7 +86,6 @@ def run_pipeline(
 
     # 4b. --skip-verify
     if config.skip_verify:
-        _say(stderr, "[verify]   skipped: --skip-verify was set")
         _rewrite_readme(layout.final_readme, verify=None, skip_reason="flag")
         return BuildResult(
             final_dir=layout.final_dir,
@@ -148,26 +146,6 @@ def run_pipeline(
 
     # 7b. README rewrite
     _rewrite_readme(layout.final_readme, verify=report, skip_reason=None)
-
-    total = (
-        len(report.diff.new_paths)
-        + len(report.diff.new_ports)
-        + len(report.diff.new_caps)
-        + len(report.diff.new_syscalls)
-        + len(report.diff.new_execs)
-    )
-    if total == 0:
-        _say(stderr, "[verify]   no new events")
-    else:
-        _say(
-            stderr,
-            f"[verify]   {len(report.diff.new_paths)} new paths, "
-            f"{len(report.diff.new_ports)} new ports, "
-            f"{len(report.diff.new_caps)} new caps, "
-            f"{len(report.diff.new_syscalls)} new syscalls, "
-            f"{len(report.diff.new_execs)} new execs",
-        )
-    _say(stderr, f"[done]     {layout.final_dir}")
 
     return BuildResult(
         final_dir=layout.final_dir,

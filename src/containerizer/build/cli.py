@@ -19,18 +19,13 @@ from containerizer.analyze.schema import PolicyJson, TraceJson
 from containerizer.build.config import BuildConfig, BuildResult
 from containerizer.build.paths import PathLayout, resolve_layout
 from containerizer.build.pipeline import PipelineError, run_pipeline
-from containerizer.generate.containerfile import render_containerfile
-from containerizer.generate.quadlet import render_quadlet
-from containerizer.generate.readme import render_readme
-from containerizer.generate.seccomp import render_seccomp
+from containerizer.generate.orchestrator import generate_all
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
 from containerizer.probe.schema import BaseImageSuggestion, ProbeResult
 from containerizer.trace.image import RunnerImage
 from containerizer.trace.runner import TraceRunner
 from containerizer.verify.diff import diff_traces
-
-SENTINEL_ENTRYPOINT = "__UNSET__"
 
 
 class PreflightError(RuntimeError):
@@ -111,6 +106,13 @@ def build_cmd(
         skip_verify=skip_verify,
         debug=debug,
     )
+
+    if start_cmd is not None:
+        click.echo(
+            "[warn]     --start-cmd is reserved and currently has no effect; "
+            "the trace orchestrator will use its default daemon detection",
+            err=True,
+        )
 
     # NOTE: --debug is accepted but currently only governs whether the
     # tempdir survives on success. The "drop a shell in the runner" path
@@ -227,27 +229,7 @@ def _default_derive_policy_fn(trace: TraceJson) -> PolicyJson:
 
 
 def _default_generate_fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
-    final_dir.mkdir(parents=True, exist_ok=True)
-    is_sentinel = policy.image.entrypoint == [SENTINEL_ENTRYPOINT]
-
-    seccomp_bytes, unknown_ids = render_seccomp(policy)
-    (final_dir / "seccomp.json").write_bytes(seccomp_bytes)
-
-    if not is_sentinel:
-        (final_dir / "Containerfile").write_text(
-            render_containerfile(policy),
-            encoding="utf-8",
-        )
-        (final_dir / f"{name}.container").write_text(
-            render_quadlet(policy, name),
-            encoding="utf-8",
-        )
-
-    (final_dir / "README.md").write_text(
-        render_readme(policy, name, skipped=is_sentinel, unknown_syscall_ids=unknown_ids),
-        encoding="utf-8",
-    )
-
+    unknown_ids = generate_all(policy, name, final_dir)
     if unknown_ids:
         click.echo(
             f"warning: syscall IDs not in bundled table "
