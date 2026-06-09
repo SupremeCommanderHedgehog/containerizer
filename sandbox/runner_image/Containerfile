@@ -26,4 +26,28 @@ COPY trace-orchestrator.sh /opt/containerizer/trace-orchestrator.sh
 COPY collectors/           /opt/containerizer/collectors/
 RUN chmod +x /opt/containerizer/trace-orchestrator.sh
 
+# M6: nested podman so the trace-runner can rebuild and exercise the
+# generated container under strict policy during the verify pass.
+RUN dnf install -y \
+        podman \
+        slirp4netns \
+        fuse-overlayfs \
+        crun \
+        conmon \
+        shadow-utils && \
+    dnf clean all && \
+    rm -rf /var/cache/dnf
+
+# Pre-create storage roots so the first nested `podman load` doesn't pay
+# cold-cache setup latency inside the trace window.
+RUN mkdir -p /var/lib/containers \
+             /var/lib/shared/overlay-images \
+             /var/lib/shared/overlay-layers \
+             /var/lib/shared/vfs-images \
+             /var/lib/shared/vfs-layers && \
+    chmod 755 /var/lib/containers
+
+COPY verify-orchestrator.sh /usr/local/bin/verify-orchestrator.sh
+RUN chmod +x /usr/local/bin/verify-orchestrator.sh
+
 ENTRYPOINT ["/opt/containerizer/trace-orchestrator.sh"]

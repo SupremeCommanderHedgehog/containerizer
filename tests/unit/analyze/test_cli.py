@@ -6,7 +6,9 @@ from pathlib import Path
 
 from click.testing import CliRunner
 
-from containerizer.analyze.cli import SENTINEL_WARNING, _assemble_trace_json, analyze_cmd
+from containerizer.analyze.assemble import SENTINEL_WARNING
+from containerizer.analyze.assemble import assemble_trace_json as _assemble_trace_json
+from containerizer.analyze.cli import analyze_cmd
 from containerizer.analyze.reader import TraceBundle
 
 COLLECTORS = ("open", "bind", "syscalls", "connect", "accept", "capable")

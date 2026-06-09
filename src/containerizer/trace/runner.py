@@ -1,10 +1,23 @@
-"""Construct and exec the `podman run` for the trace sandbox."""
+"""Construct and exec the `podman run` for the trace sandbox.
+
+The runner supports two modes:
+
+* `mode="install"` (default): the M2 behavior. Mounts the installer at
+  /installer and runs trace-orchestrator.sh. Interactive (-i) so the
+  user can press Enter when the smoke test is done.
+
+* `mode="verify"` (M6): no installer; bind-mounts a saved image tarball
+  and the final seccomp profile, sets env vars consumed by
+  verify-orchestrator.sh, passes `--mode verify` to the orchestrator.
+  Non-interactive (no -i) because the soak window is fixed.
+"""
 
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 
 class OutputDirNotEmpty(RuntimeError):
@@ -13,14 +26,46 @@ class OutputDirNotEmpty(RuntimeError):
 
 @dataclass(frozen=True)
 class TraceRunner:
-    """Builds the `podman run` argv and execs it."""
+    """Builds the `podman run` argv and execs it for one trace phase."""
 
     image_tag: str
-    installer: Path
+    installer: Path | None
     output_dir: Path
+    mode: Literal["install", "verify"] = "install"
+
+    # Verify-mode-only fields. All default to None; validated in __post_init__.
+    verify_image_tar: Path | None = None
+    verify_image_tag: str | None = None
+    verify_run_flags: tuple[str, ...] = field(default_factory=tuple)
+    verify_soak_seconds: int | None = None
+    verify_seccomp_path: Path | None = None
+
+    def __post_init__(self) -> None:
+        if self.mode == "install":
+            if self.installer is None:
+                raise ValueError("install mode requires installer")
+        else:
+            missing = [
+                name
+                for name, val in (
+                    ("verify_image_tar", self.verify_image_tar),
+                    ("verify_image_tag", self.verify_image_tag),
+                    ("verify_soak_seconds", self.verify_soak_seconds),
+                    ("verify_seccomp_path", self.verify_seccomp_path),
+                )
+                if val is None
+            ]
+            if missing:
+                raise ValueError(f"verify mode requires: {', '.join(missing)}")
 
     def argv(self) -> list[str]:
-        """Pure: returns the podman command without executing it.
+        """Pure: returns the podman command without executing it."""
+        if self.mode == "install":
+            return self._install_argv()
+        return self._verify_argv()
+
+    def _install_argv(self) -> list[str]:
+        """Install-mode argv (M2 behavior).
 
         /sys/kernel/{debug,tracing,btf} are all bind-mounted so bpftrace
         and bcc inside the container can reach the host kernel's tracing
@@ -40,6 +85,7 @@ class TraceRunner:
         The host needs `linux-headers-$(uname -r)` installed for these
         to be useful.
         """
+        assert self.installer is not None
         return [
             "podman",
             "run",
@@ -63,6 +109,49 @@ class TraceRunner:
             f"{self.output_dir.resolve()}:/work/trace",
             self.image_tag,
             "/installer",
+        ]
+
+    def _verify_argv(self) -> list[str]:
+        """Verify-mode argv (M6 retrace)."""
+        assert self.verify_image_tar is not None
+        assert self.verify_image_tag is not None
+        assert self.verify_soak_seconds is not None
+        assert self.verify_seccomp_path is not None
+
+        run_flags_env = "VERIFY_RUN_FLAGS=" + " ".join(self.verify_run_flags)
+
+        return [
+            "podman",
+            "run",
+            "--rm",
+            "--privileged",
+            "--pid=host",
+            "-v",
+            "/sys/kernel/debug:/sys/kernel/debug",
+            "-v",
+            "/sys/kernel/tracing:/sys/kernel/tracing",
+            "-v",
+            "/sys/kernel/btf:/sys/kernel/btf",
+            "-v",
+            "/lib/modules:/lib/modules:ro",
+            "-v",
+            "/usr/src:/usr/src:ro",
+            "-v",
+            f"{self.verify_image_tar.resolve()}:/work/verify/image.tar:ro",
+            "-v",
+            f"{self.verify_seccomp_path.resolve()}:/work/verify/seccomp.json:ro",
+            "-v",
+            f"{self.output_dir.resolve()}:/work/trace",
+            "-e",
+            f"VERIFY_IMAGE_TAG={self.verify_image_tag}",
+            "-e",
+            f"VERIFY_SOAK_SECONDS={self.verify_soak_seconds}",
+            "-e",
+            run_flags_env,
+            self.image_tag,
+            "/usr/local/bin/trace-orchestrator.sh",
+            "--mode",
+            "verify",
         ]
 
     def validate_output_dir(self, *, force: bool) -> None:
