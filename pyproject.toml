@@ -55,6 +55,9 @@ ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Override default norecursedirs to drop "build" — we have a tests/unit/build/
+# package for the M6 build orchestrator. Other defaults are preserved.
+norecursedirs = ["*.egg", ".*", "_darcs", "CVS", "dist", "node_modules", "venv", "{arch}"]
 addopts = "-ra --strict-markers --cov=src/containerizer --cov-report=term-missing --cov-fail-under=90"
 markers = [
     "integration: end-to-end tests requiring podman + Linux kernel with eBPF/BTF; skipped by default in local runs, run via `pytest -m integration`",
