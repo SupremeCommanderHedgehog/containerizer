@@ -98,6 +98,7 @@ class TraceRunner:
             "--rm",
             *interactive_flags,
             "--privileged",
+            "--systemd=always",
             "-v",
             "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
@@ -112,8 +113,11 @@ class TraceRunner:
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
             f"{self.output_dir.resolve()}:/work/trace",
+            "-e",
+            "CONTAINERIZER_MODE=install",
+            "-e",
+            "CONTAINERIZER_INSTALLER=/installer",
             self.image_tag,
-            "/installer",
         ]
 
     def _verify_argv(self) -> list[str]:
