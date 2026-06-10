@@ -349,6 +349,65 @@ def test_install_trace_partial_marker_emits_warning(tmp_path: Path) -> None:
     assert any("PARTIAL" in w for w in result.warnings)
 
 
+def test_trace_warnings_surface_to_stderr_and_result(tmp_path: Path) -> None:
+    """trace.warnings (e.g., 'collector connect: missing .jsonl; fallback recorded')
+    must reach stderr at parse time so the user notices data gaps, and must
+    also be carried in BuildResult.warnings so the CLI summary can echo them."""
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    def parse_with_warnings(trace_dir: Path) -> TraceJson:
+        calls.order.append(f"parse_trace:{trace_dir.name}")
+        empty = TracePhase(
+            duration_s=0.0,
+            paths=[],
+            ports=[],
+            outbound=[],
+            caps=[],
+            syscalls=[],
+            execs=[],
+        )
+        warnings = (
+            [
+                "collector connect: missing .jsonl; fallback recorded "
+                "(ERROR: Include headers with missing type definitions ...)",
+                "collector accept: missing .jsonl; fallback recorded (unknown)",
+            ]
+            if trace_dir.name == "original"
+            else []
+        )
+        return TraceJson(
+            phase_marker_ns=1,
+            marker="COMPLETE",
+            install=empty,
+            runtime=empty,
+            warnings=warnings,
+        )
+
+    stderr = io.StringIO()
+    result = run_pipeline(
+        _cfg(tmp_path),
+        probe_fn=_probe(calls),
+        install_trace_fn=_install_trace_writing_complete(calls, layout),
+        parse_trace_fn=parse_with_warnings,
+        derive_policy_fn=_derive_policy(calls, _policy(["/sbin/init"])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=stderr,
+    )
+
+    out = stderr.getvalue()
+    assert "collector connect" in out
+    assert "collector accept" in out
+    assert "[analyze]" in out
+    assert any("collector connect" in w for w in result.warnings)
+    assert any("collector accept" in w for w in result.warnings)
+
+
 def test_verify_trace_ready_failed_raises(tmp_path: Path) -> None:
     calls = Calls(order=[])
     layout = _build_layout(tmp_path)

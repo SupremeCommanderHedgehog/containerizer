@@ -181,6 +181,53 @@ def test_sentinel_skip_exits_0(tmp_path: Path) -> None:
     assert "skipped" in result.stderr.lower()
 
 
+def test_install_trace_fn_passes_tty_from_stdin_isatty(tmp_path: Path) -> None:
+    """`_default_install_trace_fn` must propagate sys.stdin.isatty() into the
+    TraceRunner so interactive installers (UniFi etc.) get a TTY when the
+    user is at a terminal, but stay non-TTY in CI/piped contexts."""
+    installer = tmp_path / "i.bin"
+    installer.write_text("x", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    captured: dict[str, object] = {}
+
+    class FakeRunner:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def run(self) -> int:
+            return 0
+
+    class FakeImage:
+        tag = "runner:fake"
+
+        def __init__(self, *, sandbox_dir: Path) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+    with (
+        patch.object(build_cli_module, "TraceRunner", FakeRunner),
+        patch.object(build_cli_module, "RunnerImage", FakeImage),
+        patch.object(build_cli_module.sys.stdin, "isatty", return_value=True),
+    ):
+        rc = build_cli_module._default_install_trace_fn(installer, None, output)
+    assert rc == 0
+    assert captured["tty"] is True
+
+    captured.clear()
+    with (
+        patch.object(build_cli_module, "TraceRunner", FakeRunner),
+        patch.object(build_cli_module, "RunnerImage", FakeImage),
+        patch.object(build_cli_module.sys.stdin, "isatty", return_value=False),
+    ):
+        rc = build_cli_module._default_install_trace_fn(installer, None, output)
+    assert rc == 0
+    assert captured["tty"] is False
+
+
 def test_pipeline_error_exits_1(tmp_path: Path) -> None:
     installer = tmp_path / "i.bin"
     installer.write_text("x", encoding="utf-8")
