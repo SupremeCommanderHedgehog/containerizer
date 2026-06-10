@@ -1,1 +1,9 @@
 tests/fixtures/probe/* binary
+
+# Scripts executed inside Linux runner containers must stay LF on every
+# checkout, including Windows hosts where core.autocrlf=true would otherwise
+# leave CRLF in the working tree and break the shebang parser inside the
+# container (`/usr/bin/env: 'bash\r'`).
+*.sh text eol=lf
+*.bt text eol=lf
+sandbox/runner_image/collectors/*.py text eol=lf
