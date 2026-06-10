@@ -7,6 +7,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
+from containerizer.analyze.strace_reader import parse_strace_network_log
+
 COLLECTORS: tuple[str, ...] = (
     "open",
     "bind",
@@ -15,6 +17,12 @@ COLLECTORS: tuple[str, ...] = (
     "accept",
     "capable",
 )
+
+# Collectors whose strace fallback log we know how to parse. Other
+# fallbacks (open, syscalls, capable use different strace domains and
+# different output shapes) are left on disk and warned about, but the
+# events themselves stay empty until those parsers exist.
+_FALLBACK_PARSEABLE: frozenset[str] = frozenset({"bind", "connect", "accept"})
 
 
 class MissingMarker(Exception):
@@ -56,11 +64,18 @@ def read_trace_dir(trace_dir: Path) -> TraceBundle:
         jsonl_path = trace_dir / f"{name}.jsonl"
         if not jsonl_path.exists():
             if name in fallbacks:
-                warnings.append(
-                    f"collector {name}: missing .jsonl; fallback recorded "
-                    f"({fallbacks[name].get('reason', 'unknown')})"
-                )
-                events[name] = []
+                recovered = _consume_fallback(trace_dir, name)
+                if recovered:
+                    warnings.append(
+                        f"collector {name}: missing .jsonl; recovered "
+                        f"{len(recovered)} events from {name}.fallback.log"
+                    )
+                else:
+                    warnings.append(
+                        f"collector {name}: missing .jsonl; fallback recorded "
+                        f"({fallbacks[name].get('reason', 'unknown')})"
+                    )
+                events[name] = recovered
                 continue
             raise MissingRequiredCollector(
                 f"{jsonl_path} missing and {name} is not in FALLBACKS.json"
@@ -106,6 +121,20 @@ def _read_fallbacks(path: Path) -> dict[str, dict[str, str]]:
         return {}
     data: dict[str, dict[str, str]] = json.loads(path.read_text(encoding="utf-8"))
     return data
+
+
+def _consume_fallback(trace_dir: Path, collector: str) -> list[dict[str, object]]:
+    """Parse the strace fallback log for a network collector. Returns
+    an empty list when the log is missing, the collector isn't one we
+    know how to parse from strace, or strace produced no matching
+    events."""
+    if collector not in _FALLBACK_PARSEABLE:
+        return []
+    log_path = trace_dir / f"{collector}.fallback.log"
+    if not log_path.exists():
+        return []
+    parsed = parse_strace_network_log(log_path)
+    return list(parsed.get(collector, []))
 
 
 def _parse_jsonl(path: Path) -> list[dict[str, object]]:
