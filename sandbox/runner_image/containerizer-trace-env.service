@@ -9,7 +9,12 @@ RequiresMountsFor=/run
 Type=oneshot
 RemainAfterExit=yes
 ExecStartPre=/usr/bin/mkdir -p /run/containerizer
-ExecStart=/usr/bin/sh -c 'env | grep -E "^CONTAINERIZER_" > /run/containerizer/env'
+# /proc/1/environ holds the env vars Podman set via -e. systemd does NOT
+# propagate PID 1's environment to child units (each unit starts with a
+# clean env), so reading the live env of this unit's own shell would miss
+# every CONTAINERIZER_* var. /proc/1/environ is null-separated; tr converts
+# to newlines so grep can filter line-wise.
+ExecStart=/usr/bin/sh -c 'tr "\0" "\n" < /proc/1/environ | grep -E "^CONTAINERIZER_" > /run/containerizer/env'
 OnFailure=poweroff.target
 
 [Install]
