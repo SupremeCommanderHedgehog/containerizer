@@ -32,6 +32,11 @@ class TraceRunner:
     installer: Path | None
     output_dir: Path
     mode: Literal["install", "verify"] = "install"
+    # Install mode only. When True, append `-t` to `podman run` so the
+    # container gets a TTY -- needed for interactive installers like UniFi
+    # that abort if their stdin prompt detects no terminal. Ignored in
+    # verify mode (which is non-interactive by design).
+    tty: bool = False
 
     # Verify-mode-only fields. All default to None; validated in __post_init__.
     verify_image_tar: Path | None = None
@@ -86,11 +91,12 @@ class TraceRunner:
         to be useful.
         """
         assert self.installer is not None
+        interactive_flags = ["-i", "-t"] if self.tty else ["-i"]
         return [
             "podman",
             "run",
             "--rm",
-            "-i",
+            *interactive_flags,
             "--privileged",
             "--pid=host",
             "-v",

@@ -173,3 +173,68 @@ def test_install_mode_validates_installer_present(tmp_path: Path) -> None:
             installer=None,
             output_dir=out,
         )
+
+
+def test_install_mode_with_tty_appends_t_flag(tmp_path: Path) -> None:
+    """When stdin is a TTY, the trace container must also get a TTY so the
+    installer's interactive prompts (e.g. UniFi's `Proceed? (y/N):`) don't
+    get instant-EOF and abort."""
+    installer = tmp_path / "installer.sh"
+    installer.write_text("echo hi", encoding="utf-8")
+    out = tmp_path / "trace"
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=out,
+        tty=True,
+    )
+    argv = runner.argv()
+    assert "-t" in argv
+    assert "-i" in argv
+    # -t should be adjacent to -i; we don't strictly require ordering but the
+    # standard idiom is "-i" then "-t" so podman parses it as `-it`.
+    i_idx = argv.index("-i")
+    t_idx = argv.index("-t")
+    assert abs(i_idx - t_idx) == 1
+
+
+def test_install_mode_without_tty_omits_t_flag(tmp_path: Path) -> None:
+    """Non-TTY parents (CI, piped invocations) still get -i but no -t."""
+    installer = tmp_path / "installer.sh"
+    installer.write_text("echo hi", encoding="utf-8")
+    out = tmp_path / "trace"
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=out,
+        tty=False,
+    )
+    argv = runner.argv()
+    assert "-i" in argv
+    assert "-t" not in argv
+
+
+def test_verify_mode_ignores_tty(tmp_path: Path) -> None:
+    """Verify mode is non-interactive by design; tty=True must not add -t."""
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"x")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}", encoding="utf-8")
+    out = tmp_path / "verify-trace"
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=None,
+        output_dir=out,
+        mode="verify",
+        verify_image_tar=image_tar,
+        verify_image_tag="demo:m6-verify",
+        verify_soak_seconds=15,
+        verify_seccomp_path=seccomp,
+        tty=True,
+    )
+    argv = runner.argv()
+    assert "-t" not in argv
+    assert "-i" not in argv
