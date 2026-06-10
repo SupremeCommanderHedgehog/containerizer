@@ -1,0 +1,23 @@
+[Unit]
+Description=Containerizer trace orchestrator
+After=multi-user.target containerizer-trace-env.service
+Requires=containerizer-trace-env.service
+Conflicts=getty@tty1.service console-getty.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+EnvironmentFile=/run/containerizer/env
+ExecStart=/opt/containerizer/trace-orchestrator.sh --mode ${CONTAINERIZER_MODE} ${CONTAINERIZER_INSTALLER}
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=no
+TTYVHangup=no
+TimeoutStartSec=0
+OnSuccess=poweroff.target
+OnFailure=poweroff.target
+
+[Install]
+WantedBy=multi-user.target
