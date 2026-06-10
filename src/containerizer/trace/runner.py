@@ -91,12 +91,19 @@ class TraceRunner:
         to be useful.
         """
         assert self.installer is not None
-        interactive_flags = ["-i", "-t"] if self.tty else ["-i"]
+        # Always allocate a TTY. The systemd-PID-1 runner (#90) wires the
+        # trace unit's stdio to /dev/console which only exists when podman
+        # allocates a pty. Without -t the container has no /dev/console and
+        # systemd fails the unit with "Failed at step STDIN". On non-TTY
+        # parents (CI, pipes) the pty just sees EOF, which the orchestrator's
+        # `read -r _ || true` handles. self.tty stays as the signal of
+        # whether the *user's* stdin is a TTY, but argv is unconditional.
         return [
             "podman",
             "run",
             "--rm",
-            *interactive_flags,
+            "-i",
+            "-t",
             "--privileged",
             "--systemd=always",
             "-v",
@@ -129,10 +136,15 @@ class TraceRunner:
 
         run_flags_env = "VERIFY_RUN_FLAGS=" + " ".join(self.verify_run_flags)
 
+        # Always allocate a TTY (same reasoning as _install_argv: the
+        # systemd unit requires /dev/console). Verify mode has no user
+        # interaction, but the pty is still needed for the unit to start.
         return [
             "podman",
             "run",
             "--rm",
+            "-i",
+            "-t",
             "--privileged",
             "--systemd=always",
             "-v",
