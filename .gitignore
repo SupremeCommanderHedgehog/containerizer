@@ -39,3 +39,7 @@ Desktop.ini
 
 # Claude Code local settings (per-machine, not shared)
 .claude/settings.local.json
+
+# Local env (per-machine test fixtures, installer paths)
+.env
+.env.local
