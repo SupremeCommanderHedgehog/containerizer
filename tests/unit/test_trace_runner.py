@@ -126,8 +126,12 @@ def test_verify_mode_argv_includes_image_tar_and_env_vars(tmp_path: Path) -> Non
     )
     argv = runner.argv()
 
-    assert "--mode" in argv
-    assert "verify" in argv
+    # Mode flows via env var, not argv positional.
+    assert "--mode" not in argv
+    assert "CONTAINERIZER_MODE=verify" in argv
+    # Verify mode does NOT set CONTAINERIZER_INSTALLER.
+    assert not any(a.startswith("CONTAINERIZER_INSTALLER=") for a in argv)
+
     assert f"{image_tar.resolve()}:/work/verify/image.tar:ro" in argv
     assert f"{seccomp.resolve()}:/work/verify/seccomp.json:ro" in argv
     assert any(a == "VERIFY_IMAGE_TAG=demo:m6-verify" for a in argv)
@@ -138,7 +142,11 @@ def test_verify_mode_argv_includes_image_tar_and_env_vars(tmp_path: Path) -> Non
     assert "-i" not in argv
     # The original /installer mount is NOT present in verify mode.
     assert not any(":/installer:" in a for a in argv)
+    # --pid=host is gone in #90; --systemd=always is present.
     assert "--pid=host" not in argv
+    assert "--systemd=always" in argv
+    # The image tag is the last token; no trailing positional command.
+    assert argv[-1] == "runner:latest"
 
 
 def test_install_mode_unchanged(tmp_path: Path) -> None:
