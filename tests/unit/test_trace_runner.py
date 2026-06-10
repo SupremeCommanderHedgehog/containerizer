@@ -28,7 +28,7 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     assert "-i" in argv
     assert "-t" not in argv
     assert "--privileged" in argv
-    assert "--pid=host" in argv
+    assert "--pid=host" not in argv
     assert "-v" in argv
     assert "/sys/kernel/debug:/sys/kernel/debug" in argv
     assert "/sys/kernel/tracing:/sys/kernel/tracing" in argv
@@ -134,6 +134,7 @@ def test_verify_mode_argv_includes_image_tar_and_env_vars(tmp_path: Path) -> Non
     assert "-i" not in argv
     # The original /installer mount is NOT present in verify mode.
     assert not any(":/installer:" in a for a in argv)
+    assert "--pid=host" not in argv
 
 
 def test_install_mode_unchanged(tmp_path: Path) -> None:
