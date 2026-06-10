@@ -124,6 +124,8 @@ class TraceRunner:
             "CONTAINERIZER_MODE=install",
             "-e",
             "CONTAINERIZER_INSTALLER=/installer",
+            "-e",
+            f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
             self.image_tag,
         ]
 

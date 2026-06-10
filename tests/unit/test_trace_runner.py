@@ -41,6 +41,9 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     # Mode + installer path now flow via env vars, not positional argv.
     assert "CONTAINERIZER_MODE=install" in argv
     assert "CONTAINERIZER_INSTALLER=/installer" in argv
+    # Default TraceRunner has tty=False -> CONTAINERIZER_INTERACTIVE=0,
+    # which tells the orchestrator to skip the "press Enter" wait.
+    assert "CONTAINERIZER_INTERACTIVE=0" in argv
     # The image tag is the last token; no trailing positional command.
     assert argv[-1] == "localhost/containerizer-runner:sha-abc12345"
 
@@ -196,7 +199,11 @@ def test_install_mode_validates_installer_present(tmp_path: Path) -> None:
 def test_install_mode_always_allocates_tty(tmp_path: Path) -> None:
     """#90: systemd-PID-1 wires the trace unit's stdio to /dev/console,
     which only exists when podman allocates a pty. -t is unconditional
-    for both tty=True (interactive) and tty=False (CI/piped) cases."""
+    for both tty=True (interactive) and tty=False (CI/piped) cases.
+
+    self.tty still affects argv via CONTAINERIZER_INTERACTIVE so the
+    orchestrator inside the container can distinguish a real user TTY
+    from a forced-by-systemd pty."""
     installer = tmp_path / "installer.sh"
     installer.write_text("echo hi", encoding="utf-8")
     out = tmp_path / "trace"
@@ -215,6 +222,10 @@ def test_install_mode_always_allocates_tty(tmp_path: Path) -> None:
         i_idx = argv.index("-i")
         t_idx = argv.index("-t")
         assert abs(i_idx - t_idx) == 1
+        expected = f"CONTAINERIZER_INTERACTIVE={1 if tty_flag else 0}"
+        assert expected in argv, (
+            f"expected {expected} when tty={tty_flag}; argv={argv}"
+        )
 
 
 def test_verify_mode_also_allocates_tty(tmp_path: Path) -> None:
