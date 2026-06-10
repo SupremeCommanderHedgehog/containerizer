@@ -58,6 +58,20 @@ RUN chmod +x /usr/local/bin/verify-orchestrator.sh
 # runs as a oneshot service wired to /dev/console.
 COPY containerizer-trace.service     /etc/systemd/system/containerizer-trace.service
 COPY containerizer-trace-env.service /etc/systemd/system/containerizer-trace-env.service
-RUN systemctl enable containerizer-trace.service containerizer-trace-env.service
+# COPY from a Windows / NTFS bind mount preserves +x and world-writable bits
+# on the .service files, which systemd refuses to parse silently and warns
+# loudly about on every boot. Normalising mode to 644 fixes both.
+RUN chmod 644 /etc/systemd/system/containerizer-trace.service \
+              /etc/systemd/system/containerizer-trace-env.service && \
+    systemctl enable containerizer-trace.service containerizer-trace-env.service
+
+# Mask audit-rules.service + auditd.service. The fedora:41 image enables
+# them by default, but Linux audit needs CAP_AUDIT_CONTROL access to the
+# host kernel audit subsystem -- not available even under --privileged
+# inside many container runtimes (WSL2 included). Without masking, the
+# units fail in a tight retry loop during every boot, scrolling [FAILED]
+# lines across the trace output. They're not load-bearing for the trace
+# workload; masking is the cleanest way to silence them.
+RUN systemctl mask audit-rules.service auditd.service
 
 ENTRYPOINT ["/sbin/init"]
