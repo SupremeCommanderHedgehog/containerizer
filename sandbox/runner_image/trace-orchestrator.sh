@@ -147,12 +147,23 @@ if [[ "$MODE" == "install" ]]; then
     # ---- existing M2 install-mode workload ----
     echo "trace-orchestrator: running installer $INSTALLER" >&2
 
-    # Run installer in the background with stdout+stderr captured via a process-
-    # substitution fd, so $! is the installer's pid (not tee's).
-    exec 3> >(tee "$TRACE_DIR/install.log")
-    "$INSTALLER" >&3 2>&3 &
-    installer_pid="$!"
-    exec 3>&-
+    if [[ -t 1 ]]; then
+        # Interactive run (podman run -it): let installer stdio flow through
+        # to the host terminal so isatty(STDOUT_FILENO) is true. Installers
+        # like example-app check this before showing a Y/N prompt and bail with
+        # "User cancelled operation" if stdout is a pipe. No install.log in
+        # this branch -- the user is watching the output live.
+        "$INSTALLER" &
+        installer_pid="$!"
+    else
+        # Non-interactive run (CI, integration tests, scripted invocations):
+        # tee stdout+stderr to install.log for offline debugging. Process
+        # substitution so $! is the installer's pid (not tee's).
+        exec 3> >(tee "$TRACE_DIR/install.log")
+        "$INSTALLER" >&3 2>&3 &
+        installer_pid="$!"
+        exec 3>&-
+    fi
 
     # Spawn one strace per failed collector, targeting the installer pid. Each
     # strace exits when the traced process does.
