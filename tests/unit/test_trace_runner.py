@@ -29,6 +29,7 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     assert "-t" not in argv
     assert "--privileged" in argv
     assert "--pid=host" not in argv
+    assert "--systemd=always" in argv
     assert "-v" in argv
     assert "/sys/kernel/debug:/sys/kernel/debug" in argv
     assert "/sys/kernel/tracing:/sys/kernel/tracing" in argv
@@ -37,8 +38,11 @@ def test_argv_is_the_podman_run_command(tmp_path: Path) -> None:
     assert "/usr/src:/usr/src:ro" in argv
     assert f"{installer.resolve()}:/installer:ro" in argv
     assert f"{output.resolve()}:/work/trace" in argv
-    assert argv[-2] == "localhost/containerizer-runner:sha-abc12345"
-    assert argv[-1] == "/installer"
+    # Mode + installer path now flow via env vars, not positional argv.
+    assert "CONTAINERIZER_MODE=install" in argv
+    assert "CONTAINERIZER_INSTALLER=/installer" in argv
+    # The image tag is the last token; no trailing positional command.
+    assert argv[-1] == "localhost/containerizer-runner:sha-abc12345"
 
 
 def test_output_dir_with_complete_marker_is_rejected_without_force(tmp_path: Path) -> None:
@@ -148,10 +152,12 @@ def test_install_mode_unchanged(tmp_path: Path) -> None:
         output_dir=out,
     )
     argv = runner.argv()
-    # Default mode is "install"; behavior must be byte-identical to M2.
+    # Default mode is "install"; argv shape stable across both M2 and #90.
     assert "-i" in argv
     assert any(":/installer:ro" in a for a in argv)
-    assert "--mode" not in argv  # not passed in install mode
+    # Mode flows via env var, not argv.
+    assert "--mode" not in argv
+    assert "CONTAINERIZER_MODE=install" in argv
 
 
 def test_verify_mode_validates_required_fields(tmp_path: Path) -> None:
