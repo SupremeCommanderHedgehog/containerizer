@@ -134,6 +134,7 @@ class TraceRunner:
             "run",
             "--rm",
             "--privileged",
+            "--systemd=always",
             "-v",
             "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
@@ -156,10 +157,9 @@ class TraceRunner:
             f"VERIFY_SOAK_SECONDS={self.verify_soak_seconds}",
             "-e",
             run_flags_env,
+            "-e",
+            "CONTAINERIZER_MODE=verify",
             self.image_tag,
-            "/usr/local/bin/trace-orchestrator.sh",
-            "--mode",
-            "verify",
         ]
 
     def validate_output_dir(self, *, force: bool) -> None:
