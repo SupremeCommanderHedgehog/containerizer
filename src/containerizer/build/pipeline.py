@@ -62,6 +62,7 @@ def run_pipeline(
     # 3. analyze original
     _say(stderr, "[analyze]  parsing original trace")
     original_trace = parse_trace_fn(layout.trace_original_dir)
+    _surface_trace_warnings(stderr, warnings, original_trace, phase="original")
     layout.analyze_trace_json.parent.mkdir(parents=True, exist_ok=True)
     write_trace_json(original_trace, layout.analyze_trace_json)
 
@@ -138,6 +139,7 @@ def run_pipeline(
 
     # 7. analyze verify
     verify_trace = parse_trace_fn(layout.trace_verify_dir)
+    _surface_trace_warnings(stderr, warnings, verify_trace, phase="verify")
     write_trace_json(verify_trace, layout.analyze_verify_trace_json)
 
     # 7a. diff
@@ -158,6 +160,23 @@ def run_pipeline(
 
 def _say(stderr: TextIO, msg: str) -> None:
     stderr.write(msg + "\n")
+
+
+def _surface_trace_warnings(
+    stderr: TextIO,
+    warnings: list[str],
+    trace: TraceJson,
+    *,
+    phase: str,
+) -> None:
+    """Echo analyzer-reported warnings to stderr and collect them in the
+    pipeline warnings list. Used so the user sees data gaps (e.g., failed
+    bpftrace probes that fell back to strace and produced no events) instead
+    of having to open trace.json to find them."""
+    for w in trace.warnings:
+        line = f"[analyze]  ({phase}) {w}"
+        _say(stderr, line)
+        warnings.append(line)
 
 
 def _read_install_marker(trace_dir: Path) -> Literal["COMPLETE", "PARTIAL"]:

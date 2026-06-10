@@ -216,6 +216,7 @@ def _default_install_trace_fn(
         image_tag=image.tag,
         installer=installer.resolve(),
         output_dir=output_dir.resolve(),
+        tty=sys.stdin.isatty(),
     )
     return runner.run()
 
