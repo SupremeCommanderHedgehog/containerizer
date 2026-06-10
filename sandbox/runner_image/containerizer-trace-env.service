@@ -1,0 +1,16 @@
+[Unit]
+Description=Publish podman-passed env to /run/containerizer/env
+DefaultDependencies=no
+Before=containerizer-trace.service
+After=local-fs.target
+RequiresMountsFor=/run
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/mkdir -p /run/containerizer
+ExecStart=/usr/bin/sh -c 'env | grep -E "^CONTAINERIZER_" > /run/containerizer/env'
+OnFailure=poweroff.target
+
+[Install]
+WantedBy=multi-user.target
