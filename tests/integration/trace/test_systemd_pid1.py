@@ -42,9 +42,7 @@ def test_loginctl_installer_succeeds_under_systemd_pid1(tmp_path: Path) -> None:
     )
 
     # Orchestrator must finalise COMPLETE (installer exited 0).
-    assert (out / "COMPLETE").exists(), (
-        f"no COMPLETE marker; stderr was:\n{result.stderr}"
-    )
+    assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr was:\n{result.stderr}"
 
     # Installer's own success line must appear in install.log (or stdout
     # if the interactive branch fired -- this test runs non-interactive
@@ -80,10 +78,7 @@ def test_runner_image_entrypoint_is_sbin_init(tmp_path: Path) -> None:
         text=True,
         timeout=30,
     )
-    runner_images = [
-        line for line in images.stdout.splitlines()
-        if "containerizer-runner" in line
-    ]
+    runner_images = [line for line in images.stdout.splitlines() if "containerizer-runner" in line]
     if not runner_images:
         pytest.skip("no runner image built yet; this test runs after another integration test")
 

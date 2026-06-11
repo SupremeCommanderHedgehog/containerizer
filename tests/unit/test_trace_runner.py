@@ -223,9 +223,7 @@ def test_install_mode_always_allocates_tty(tmp_path: Path) -> None:
         t_idx = argv.index("-t")
         assert abs(i_idx - t_idx) == 1
         expected = f"CONTAINERIZER_INTERACTIVE={1 if tty_flag else 0}"
-        assert expected in argv, (
-            f"expected {expected} when tty={tty_flag}; argv={argv}"
-        )
+        assert expected in argv, f"expected {expected} when tty={tty_flag}; argv={argv}"
 
 
 def test_verify_mode_also_allocates_tty(tmp_path: Path) -> None:
