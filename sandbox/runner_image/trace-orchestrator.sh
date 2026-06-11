@@ -147,12 +147,37 @@ if [[ "$MODE" == "install" ]]; then
     # ---- existing M2 install-mode workload ----
     echo "trace-orchestrator: running installer $INSTALLER" >&2
 
-    if [[ -t 1 ]]; then
-        # Interactive run (podman run -it): let installer stdio flow through
-        # to the host terminal so isatty(STDOUT_FILENO) is true. Installers
-        # like UniFi check this before showing a Y/N prompt and bail with
-        # "User cancelled operation" if stdout is a pipe. No install.log in
-        # this branch -- the user is watching the output live.
+    # Decide interactive vs non-interactive. Under systemd-PID-1 (#90) the
+    # unit's stdio is wired to /dev/console (a pty) regardless of whether
+    # the *user* ran containerizer trace from a terminal or from a CI
+    # script -- so the old `[[ -t 1 ]]` TTY probe always reads "TTY" and
+    # can't distinguish the two. runner.py sets CONTAINERIZER_INTERACTIVE
+    # from the host's actual stdin TTY status, and the env-publisher unit
+    # makes it visible to us. Fall back to the TTY probe when the env var
+    # is unset (e.g., running the orchestrator outside the systemd path).
+    if [[ -n "${CONTAINERIZER_INTERACTIVE:-}" ]]; then
+        interactive="${CONTAINERIZER_INTERACTIVE}"
+    elif [[ -t 1 ]]; then
+        interactive=1
+    else
+        interactive=0
+    fi
+
+    if [[ "$interactive" == 1 ]]; then
+        # Interactive run (podman run -it from a real terminal): let
+        # installer stdio flow through to the host terminal so
+        # isatty(STDOUT_FILENO) is true. Installers like UniFi check this
+        # before showing a Y/N prompt and bail with "User cancelled
+        # operation" if stdout is a pipe. No install.log in this branch
+        # -- the user is watching the output live.
+        #
+        # NOTE: backgrounding here is required so we can attach strace
+        # fallbacks (see below). Node-based installers (UniFi) instant-
+        # abort their Y/N prompt regardless of whether we background or
+        # foreground here -- the abort is a separate stdin-mode bug in
+        # the installer that's tracked as a follow-up to #90. We
+        # preserve the backgrounded shape so the strace fallback path
+        # keeps working for installers that DO handle this gracefully.
         "$INSTALLER" &
         installer_pid="$!"
     else
@@ -186,10 +211,17 @@ if [[ "$MODE" == "install" ]]; then
     awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
         > "$TRACE_DIR/PHASE_MARKER"
 
-    echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
-
-    # read returns non-zero on EOF; we treat both Enter and EOF as the COMPLETE path.
-    read -r _ || true
+    if [[ "$interactive" == 1 ]]; then
+        echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
+        # read returns non-zero on EOF; we treat both Enter and EOF as the COMPLETE path.
+        read -r _ || true
+    else
+        # Non-interactive: finalise immediately. Under systemd-PID-1 the
+        # unit's stdin is wired to /dev/console; EOF from podman's stdin
+        # does not reliably propagate to the pty slave, so blocking on
+        # read here would hang CI runs forever even with `< /dev/null`.
+        echo "trace-orchestrator: installer complete (non-interactive); finalising" >&2
+    fi
     finalize_marker COMPLETE
     echo "trace-orchestrator: COMPLETE" >&2
 else

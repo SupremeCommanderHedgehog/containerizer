@@ -91,14 +91,21 @@ class TraceRunner:
         to be useful.
         """
         assert self.installer is not None
-        interactive_flags = ["-i", "-t"] if self.tty else ["-i"]
+        # Always allocate a TTY. The systemd-PID-1 runner (#90) wires the
+        # trace unit's stdio to /dev/console which only exists when podman
+        # allocates a pty. Without -t the container has no /dev/console and
+        # systemd fails the unit with "Failed at step STDIN". On non-TTY
+        # parents (CI, pipes) the pty just sees EOF, which the orchestrator's
+        # `read -r _ || true` handles. self.tty stays as the signal of
+        # whether the *user's* stdin is a TTY, but argv is unconditional.
         return [
             "podman",
             "run",
             "--rm",
-            *interactive_flags,
+            "-i",
+            "-t",
             "--privileged",
-            "--pid=host",
+            "--systemd=always",
             "-v",
             "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
@@ -113,8 +120,13 @@ class TraceRunner:
             f"{self.installer.resolve()}:/installer:ro",
             "-v",
             f"{self.output_dir.resolve()}:/work/trace",
+            "-e",
+            "CONTAINERIZER_MODE=install",
+            "-e",
+            "CONTAINERIZER_INSTALLER=/installer",
+            "-e",
+            f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
             self.image_tag,
-            "/installer",
         ]
 
     def _verify_argv(self) -> list[str]:
@@ -126,12 +138,17 @@ class TraceRunner:
 
         run_flags_env = "VERIFY_RUN_FLAGS=" + " ".join(self.verify_run_flags)
 
+        # Always allocate a TTY (same reasoning as _install_argv: the
+        # systemd unit requires /dev/console). Verify mode has no user
+        # interaction, but the pty is still needed for the unit to start.
         return [
             "podman",
             "run",
             "--rm",
+            "-i",
+            "-t",
             "--privileged",
-            "--pid=host",
+            "--systemd=always",
             "-v",
             "/sys/kernel/debug:/sys/kernel/debug",
             "-v",
@@ -154,10 +171,9 @@ class TraceRunner:
             f"VERIFY_SOAK_SECONDS={self.verify_soak_seconds}",
             "-e",
             run_flags_env,
+            "-e",
+            "CONTAINERIZER_MODE=verify",
             self.image_tag,
-            "/usr/local/bin/trace-orchestrator.sh",
-            "--mode",
-            "verify",
         ]
 
     def validate_output_dir(self, *, force: bool) -> None:
