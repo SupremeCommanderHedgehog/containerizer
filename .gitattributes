@@ -6,4 +6,5 @@ tests/fixtures/probe/* binary
 # container (`/usr/bin/env: 'bash\r'`).
 *.sh text eol=lf
 *.bt text eol=lf
+*.service text eol=lf
 sandbox/runner_image/collectors/*.py text eol=lf

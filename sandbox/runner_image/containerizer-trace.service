@@ -1,0 +1,26 @@
+[Unit]
+Description=Containerizer trace orchestrator
+After=multi-user.target containerizer-trace-env.service
+Requires=containerizer-trace-env.service
+Conflicts=getty@tty1.service console-getty.service
+# OnSuccess= / OnFailure= live in [Unit], not [Service]. systemd silently
+# ignores them with "Unknown key in section [Service]" when misplaced,
+# which is what kept poweroff.target from ever firing before this fix.
+OnSuccess=poweroff.target
+OnFailure=poweroff.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=no
+EnvironmentFile=/run/containerizer/env
+ExecStart=/opt/containerizer/trace-orchestrator.sh --mode ${CONTAINERIZER_MODE} ${CONTAINERIZER_INSTALLER}
+StandardInput=tty
+StandardOutput=tty
+StandardError=tty
+TTYPath=/dev/console
+TTYReset=no
+TTYVHangup=no
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

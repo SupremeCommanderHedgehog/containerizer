@@ -7,6 +7,9 @@
 #   * stock Fedora kernel exposes BTF for bcc and bpftrace probe attach
 #   * systemd-as-PID-1 inside the container is the supported Fedora pattern
 #
+# As of issue #90 the runner BOOTS systemd as PID 1 (ENTRYPOINT=/sbin/init).
+# The existing trace-orchestrator.sh runs as a oneshot systemd service.
+#
 # The image is intentionally fat (~600 MB). It is built once per sandbox/
 # directory content hash on the user's host (see src/containerizer/trace/image.py)
 # and reused across every `containerizer trace` invocation.
@@ -50,4 +53,25 @@ RUN mkdir -p /var/lib/containers \
 COPY verify-orchestrator.sh /usr/local/bin/verify-orchestrator.sh
 RUN chmod +x /usr/local/bin/verify-orchestrator.sh
 
-ENTRYPOINT ["/opt/containerizer/trace-orchestrator.sh"]
+# Issue #90: boot systemd as PID 1 so installers that need loginctl /
+# systemctl --user / the system DBus bus work end-to-end. The orchestrator
+# runs as a oneshot service wired to /dev/console.
+COPY containerizer-trace.service     /etc/systemd/system/containerizer-trace.service
+COPY containerizer-trace-env.service /etc/systemd/system/containerizer-trace-env.service
+# COPY from a Windows / NTFS bind mount preserves +x and world-writable bits
+# on the .service files, which systemd refuses to parse silently and warns
+# loudly about on every boot. Normalising mode to 644 fixes both.
+RUN chmod 644 /etc/systemd/system/containerizer-trace.service \
+              /etc/systemd/system/containerizer-trace-env.service && \
+    systemctl enable containerizer-trace.service containerizer-trace-env.service
+
+# Mask audit-rules.service + auditd.service. The fedora:41 image enables
+# them by default, but Linux audit needs CAP_AUDIT_CONTROL access to the
+# host kernel audit subsystem -- not available even under --privileged
+# inside many container runtimes (WSL2 included). Without masking, the
+# units fail in a tight retry loop during every boot, scrolling [FAILED]
+# lines across the trace output. They're not load-bearing for the trace
+# workload; masking is the cleanest way to silence them.
+RUN systemctl mask audit-rules.service auditd.service
+
+ENTRYPOINT ["/sbin/init"]

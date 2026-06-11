@@ -187,12 +187,17 @@ def test_trace_errors_when_no_marker_is_written(
 @patch("containerizer.trace.cli.TraceRunner")
 @patch("containerizer.trace.cli.RunnerImage")
 @patch("containerizer.trace.cli._podman_machine_is_running")
-def test_trace_warns_on_fallbacks_and_propagates_nonzero_exit(
+def test_trace_warns_on_fallbacks_and_notes_nonzero_exit(
     mock_machine: MagicMock,
     mock_image_cls: MagicMock,
     mock_runner_cls: MagicMock,
     tmp_path: Path,
 ) -> None:
+    """Under systemd-PID-1 (#90) the container exit code reflects shutdown
+    signal noise, not orchestrator success. The CLI must trust the marker:
+    PARTIAL/COMPLETE means the orchestrator finalised, so the CLI exits 0
+    and surfaces the podman exit code as a diagnostic note rather than an
+    error. Pre-#90 this path raised; the rename captures the new contract."""
     mock_machine.return_value = True
     image = MagicMock()
     image.exists.return_value = True
@@ -213,9 +218,10 @@ def test_trace_warns_on_fallbacks_and_propagates_nonzero_exit(
     (output / "open.jsonl").write_text("{}\n{}\n", encoding="utf-8")
 
     result = CliRunner().invoke(main, ["trace", str(installer), "-o", str(output)])
-    assert result.exit_code != 0
+    assert result.exit_code == 0
     assert "fell back to strace" in result.output
     assert "podman exited with code 7" in result.output
+    assert "treating marker as authoritative" in result.output
 
 
 @patch("containerizer.trace.cli.subprocess.run")
