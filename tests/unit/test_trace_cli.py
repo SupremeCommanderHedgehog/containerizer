@@ -35,6 +35,74 @@ def test_trace_refuses_when_podman_machine_is_not_running(
     assert "start" in result.output.lower()
 
 
+def test_trace_propagates_stdin_isatty_to_runner(tmp_path: Path) -> None:
+    """#95: trace/cli.py must propagate sys.stdin.isatty() to TraceRunner so
+    runner.py sets CONTAINERIZER_INTERACTIVE=1 when the user is at a
+    terminal. Without this the orchestrator inside the runner takes the
+    non-interactive branch and bash auto-redirects the backgrounded
+    installer's stdin to /dev/null, breaking Y/N prompts (e.g. UniFi).
+    build/cli.py already wires this; trace/cli.py was the asymmetric path.
+
+    Mirrors the test pattern build's test_install_trace_fn_passes_tty_from_stdin_isatty
+    uses: invoke the underlying callback directly so CliRunner's stdin
+    replacement doesn't mask the patched sys.stdin.isatty.
+    """
+    from containerizer.trace import cli as trace_cli_module
+    from containerizer.trace.cli import trace_cmd
+
+    installer = tmp_path / "fake-installer"
+    installer.write_bytes(b"\x00")
+    output = tmp_path / "out"
+    output.mkdir()
+    (output / "COMPLETE").write_text("", encoding="utf-8")
+
+    captured: dict[str, object] = {}
+
+    class FakeRunner:
+        def __init__(self, **kwargs: object) -> None:
+            captured.update(kwargs)
+
+        def validate_output_dir(self, *, force: bool) -> None:
+            return None
+
+        def run(self) -> int:
+            return 0
+
+    class FakeImage:
+        tag = "runner:fake"
+
+        def __init__(self, *, sandbox_dir: Path) -> None:
+            pass
+
+        def exists(self) -> bool:
+            return True
+
+    from contextlib import ExitStack
+
+    def _invoke(isatty_value: bool) -> None:
+        with ExitStack() as stack:
+            stack.enter_context(patch.object(trace_cli_module, "TraceRunner", FakeRunner))
+            stack.enter_context(patch.object(trace_cli_module, "RunnerImage", FakeImage))
+            stack.enter_context(
+                patch.object(trace_cli_module, "_podman_machine_is_running", return_value=True)
+            )
+            stack.enter_context(
+                patch.object(trace_cli_module.sys.stdin, "isatty", return_value=isatty_value)
+            )
+            trace_cmd.callback(installer=installer, output_dir=output, force=False)
+
+    # Terminal case: tty=True must reach the runner.
+    _invoke(True)
+    assert captured.get("tty") is True, f"trace/cli.py did not pass tty=True; captured={captured}"
+
+    # CI/piped case: tty=False must reach the runner.
+    captured.clear()
+    _invoke(False)
+    assert captured.get("tty") is False, (
+        f"trace/cli.py passed tty=True when stdin was not a TTY; captured={captured}"
+    )
+
+
 @patch("containerizer.trace.cli.TraceRunner")
 @patch("containerizer.trace.cli.RunnerImage")
 @patch("containerizer.trace.cli._podman_machine_is_running")
