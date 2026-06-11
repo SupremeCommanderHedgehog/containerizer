@@ -93,9 +93,7 @@ def test_trace_propagates_stdin_isatty_to_runner(tmp_path: Path) -> None:
 
     # Terminal case: tty=True must reach the runner.
     _invoke(True)
-    assert captured.get("tty") is True, (
-        f"trace/cli.py did not pass tty=True; captured={captured}"
-    )
+    assert captured.get("tty") is True, f"trace/cli.py did not pass tty=True; captured={captured}"
 
     # CI/piped case: tty=False must reach the runner.
     captured.clear()
