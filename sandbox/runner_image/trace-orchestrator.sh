@@ -166,19 +166,21 @@ if [[ "$MODE" == "install" ]]; then
     if [[ "$interactive" == 1 ]]; then
         # Interactive run (podman run -it from a real terminal): let
         # installer stdio flow through to the host terminal so
-        # isatty(STDOUT_FILENO) is true. Installers like example-app check this
-        # before showing a Y/N prompt and bail with "User cancelled
-        # operation" if stdout is a pipe. No install.log in this branch
-        # -- the user is watching the output live.
+        # isatty(STDOUT_FILENO) is true and so the installer's stdin
+        # reads see the user's keystrokes. Installers like example-app check
+        # both before showing a Y/N prompt.
         #
-        # NOTE: backgrounding here is required so we can attach strace
-        # fallbacks (see below). Node-based installers (example-app) instant-
-        # abort their Y/N prompt regardless of whether we background or
-        # foreground here -- the abort is a separate stdin-mode bug in
-        # the installer that's tracked as a follow-up to #90. We
-        # preserve the backgrounded shape so the strace fallback path
-        # keeps working for installers that DO handle this gracefully.
-        "$INSTALLER" &
+        # The `<&0` is load-bearing (#95): bash's documented behavior is
+        # to auto-redirect the standard input of asynchronous (`&`)
+        # commands to /dev/null when job control is off -- which is
+        # always the case under a systemd unit's ExecStart. Without an
+        # explicit stdin redirect, example-app's Y/N prompt readline sees
+        # EOF immediately and aborts with "User cancelled operation".
+        # `<&0` inherits bash's stdin (the /dev/console pty set up by
+        # the systemd unit's StandardInput=tty), bypassing the auto
+        # /dev/null. Backgrounding stays in place so strace fallbacks
+        # can still attach to the installer's PID below.
+        "$INSTALLER" <&0 &
         installer_pid="$!"
     else
         # Non-interactive run (CI, integration tests, scripted invocations):
