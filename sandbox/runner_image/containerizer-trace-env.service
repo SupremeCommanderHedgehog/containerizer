@@ -1,0 +1,26 @@
+[Unit]
+Description=Publish podman-passed env to /run/containerizer/env
+DefaultDependencies=no
+Before=containerizer-trace.service
+After=local-fs.target
+RequiresMountsFor=/run
+# OnFailure= belongs in [Unit], not [Service]. systemd silently ignores it
+# with "Unknown key in section [Service]" otherwise.
+OnFailure=poweroff.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/bin/mkdir -p /run/containerizer
+# /proc/1/environ holds the env vars Podman set via -e. systemd does NOT
+# propagate PID 1's environment to child units (each unit starts with a
+# clean env), so reading the live env of this unit's own shell would miss
+# every CONTAINERIZER_* var. /proc/1/environ is null-separated; tr converts
+# to newlines so grep can filter line-wise. Backslashes are doubled so
+# systemd's unit-file escape pass leaves "\0" and "\n" intact for sh,
+# instead of warning "Ignoring unknown escape sequences" and substituting
+# a literal newline into the command line.
+ExecStart=/usr/bin/sh -c 'tr "\\0" "\\n" < /proc/1/environ | grep -E "^CONTAINERIZER_" > /run/containerizer/env'
+
+[Install]
+WantedBy=multi-user.target

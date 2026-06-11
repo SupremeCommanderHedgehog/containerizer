@@ -131,4 +131,13 @@ def _print_summary(output_dir: Path, *, exit_code: int) -> None:
         click.echo(fallbacks.read_text(encoding="utf-8"), err=True)
 
     if exit_code != 0:
-        raise click.ClickException(f"podman exited with code {exit_code} (marker was {marker})")
+        # Under systemd-PID-1 (#90) the container exit code reflects whatever
+        # signal systemd-shutdown took to power off (commonly 130 SIGINT or
+        # 143 SIGTERM), not the orchestrator's success. The marker is the
+        # source of truth; surface the code as diagnostic noise rather than
+        # erroring out when the orchestrator finalised cleanly.
+        click.echo(
+            f"NOTE: podman exited with code {exit_code} (marker {marker}); "
+            f"treating marker as authoritative.",
+            err=True,
+        )

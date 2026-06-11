@@ -301,6 +301,18 @@ containerizer build .\path\to\synthetic.sh `
 
 ## Scenario 11 — example-app installer end-to-end through `build`
 
+**Status (2026-06-10, post-#90):** Mechanically unblocked through the
+`loginctl enable-linger` failure point — #90's systemd-PID-1 runner
+boots stock systemd cleanly, `systemd-logind` is reachable, the system
+DBus bus is up, and the example-app installer launches successfully and
+reaches its `Proceed? (y/N):` prompt. example-app then instant-aborts with
+`User cancelled operation` before reading user input. Reproduced both
+backgrounded and foregrounded inside the orchestrator, so this is a
+separate stdin-mode issue inside the example-app installer itself, not a
+process-group or job-control problem with the orchestrator. Tracked
+as a follow-up to #90; end-to-end Scenario 11 acceptance is gated on
+that follow-up landing.
+
 **Goal:** Run the real example application installer end-to-end. Closes the
 design §11 open question about classifier rules at real-installer scale.
 
