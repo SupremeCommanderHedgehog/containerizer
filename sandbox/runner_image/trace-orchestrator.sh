@@ -163,6 +163,7 @@ if [[ "$MODE" == "install" ]]; then
         interactive=0
     fi
 
+    install_rc=0
     if [[ "$interactive" == 1 ]]; then
         # Interactive run (podman run -it from a real terminal): let
         # installer stdio flow through to the host terminal so
@@ -170,28 +171,36 @@ if [[ "$MODE" == "install" ]]; then
         # before showing a Y/N prompt and bail with "User cancelled
         # operation" if stdout is a pipe. No install.log in this branch
         # -- the user is watching the output live.
-        "$INSTALLER" &
-        installer_pid="$!"
+        #
+        # Run in the foreground (no `&`) -- Node-based installers (UniFi)
+        # instant-abort their Y/N prompt if backgrounded, because bash's
+        # backgrounded child can't acquire the controlling terminal and
+        # the installer's stdin-TTY check fails before user input
+        # arrives. The trade-off: with no pid in hand we can't attach
+        # strace fallbacks to the installer; BPF collectors keep
+        # working in parallel since they attach via the kernel, not
+        # via PID.
+        "$INSTALLER" || install_rc=$?
     else
         # Non-interactive run (CI, integration tests, scripted invocations):
         # tee stdout+stderr to install.log for offline debugging. Process
-        # substitution so $! is the installer's pid (not tee's).
+        # substitution so $! is the installer's pid (not tee's). Backgrounded
+        # so we can spawn strace fallbacks targeting the installer's pid.
         exec 3> >(tee "$TRACE_DIR/install.log")
         "$INSTALLER" >&3 2>&3 &
         installer_pid="$!"
         exec 3>&-
+
+        # Spawn one strace per failed collector, targeting the installer pid.
+        # Each strace exits when the traced process does.
+        for name in "${!fallbacks[@]}"; do
+            # shellcheck disable=SC2086  # we WANT word splitting on "${domain[$name]}"
+            strace -f -o "$TRACE_DIR/$name.fallback.log" ${domain[$name]} -p "$installer_pid" 2>/dev/null &
+            collector_pids+=("$!")
+        done
+
+        wait "$installer_pid" || install_rc=$?
     fi
-
-    # Spawn one strace per failed collector, targeting the installer pid. Each
-    # strace exits when the traced process does.
-    for name in "${!fallbacks[@]}"; do
-        # shellcheck disable=SC2086  # we WANT word splitting on "${domain[$name]}"
-        strace -f -o "$TRACE_DIR/$name.fallback.log" ${domain[$name]} -p "$installer_pid" 2>/dev/null &
-        collector_pids+=("$!")
-    done
-
-    install_rc=0
-    wait "$installer_pid" || install_rc=$?
     echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
     if (( install_rc != 0 )); then
