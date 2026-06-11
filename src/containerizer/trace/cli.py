@@ -96,6 +96,15 @@ def trace_cmd(installer: Path, output_dir: Path, force: bool) -> None:
         image_tag=image.tag,
         installer=installer.resolve(),
         output_dir=output_dir.resolve(),
+        # #95: propagate the host's actual stdin TTY status. Without this
+        # runner.py defaults self.tty to False, sets
+        # CONTAINERIZER_INTERACTIVE=0 in the container, and the orchestrator
+        # under systemd-PID-1 takes the non-interactive branch even when the
+        # user is sitting at a terminal -- which means bash auto-redirects
+        # the backgrounded installer's stdin to /dev/null and Y/N prompts
+        # (UniFi etc.) abort with empty input. build/cli.py already wires
+        # this; trace/cli.py was the asymmetric path.
+        tty=sys.stdin.isatty(),
     )
     try:
         runner.validate_output_dir(force=force)
