@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -78,8 +79,37 @@ def _podman_machine_is_running() -> bool:
     is_flag=True,
     help="Overwrite output-dir if it already contains a COMPLETE / PARTIAL marker.",
 )
-def trace_cmd(installer: Path, output_dir: Path, force: bool) -> None:
+@click.option(
+    "--installer",
+    "extra_installers",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    help="Additional .deb installed in same apt transaction as primary. Repeatable; cap 99.",
+)
+@click.option(
+    "--apt-source",
+    "apt_sources",
+    multiple=True,
+    type=str,
+    help="Verbatim 'deb …' line written to /etc/apt/sources.list.d/containerizer.list. Repeatable.",
+)
+@click.option(
+    "--apt-key",
+    "apt_keys",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    help="Keyring (.gpg or .asc) copied into /etc/apt/keyrings/ before apt-get update. Repeatable.",
+)
+def trace_cmd(
+    installer: Path,
+    output_dir: Path,
+    force: bool,
+    extra_installers: tuple[Path, ...],
+    apt_sources: tuple[str, ...],
+    apt_keys: tuple[Path, ...],
+) -> None:
     """Run INSTALLER inside the trace sandbox and capture observations."""
+    _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
     if not _podman_machine_is_running():
         raise click.ClickException(
             "Podman machine is not running. Start it with: podman machine start"
@@ -105,6 +135,9 @@ def trace_cmd(installer: Path, output_dir: Path, force: bool) -> None:
         # (UniFi etc.) abort with empty input. build/cli.py already wires
         # this; trace/cli.py was the asymmetric path.
         tty=sys.stdin.isatty(),
+        extra_installers=tuple(p.resolve() for p in extra_installers),
+        apt_sources=apt_sources,
+        apt_keys=tuple(p.resolve() for p in apt_keys),
     )
     try:
         runner.validate_output_dir(force=force)
@@ -150,3 +183,37 @@ def _print_summary(output_dir: Path, *, exit_code: int) -> None:
             f"treating marker as authoritative.",
             err=True,
         )
+
+
+_DEB_LINE = re.compile(r"^\s*deb(-src)?\s+")
+
+
+def _validate_multi_deb_flags(
+    extra_installers: tuple[Path, ...],
+    apt_sources: tuple[str, ...],
+    apt_keys: tuple[Path, ...],
+) -> None:
+    """Issue #102 CLI validation. Shared by trace_cmd and build_cmd."""
+    if len(extra_installers) > 99:
+        raise click.BadParameter("--installer cap is 99 extras", param_hint="--installer")
+    for src in apt_sources:
+        if not _DEB_LINE.match(src):
+            raise click.BadParameter(
+                "--apt-source must start with 'deb ' or 'deb-src '",
+                param_hint="--apt-source",
+            )
+    for key in apt_keys:
+        if key.suffix.lower() not in (".gpg", ".asc"):
+            raise click.BadParameter(
+                "--apt-key must end in .gpg or .asc",
+                param_hint="--apt-key",
+            )
+    if apt_sources and not apt_keys:
+        for src in apt_sources:
+            if "[signed-by=" in src:
+                click.echo(
+                    "warning: --apt-source uses [signed-by=…] but no --apt-key was given; "
+                    "apt-get update will likely fail",
+                    err=True,
+                )
+                break

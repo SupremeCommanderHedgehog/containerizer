@@ -390,3 +390,58 @@ The model is `frozen=True` end-to-end (`pydantic` v2), so any downstream code th
 - **Anything inside a Podman machine.** The probe is pure static analysis; it doesn't need Podman, a sandbox, or root.
 
 If you hit something that doesn't match the manual, the repo's issue tracker is the right place: <https://github.com/SupremeCommanderHedgehog/containerizer/issues>.
+
+## Scenario 12 — Real UniFi + locally-supplied mongodb-org-server (`--installer`)
+
+**Goal.** Containerize the real `unifi_sysvinit_all.deb` against a locally-downloaded `mongodb-org-server_8.0.x_amd64.deb`. Validates the `--installer` flow against a non-trivial real package.
+
+**Setup.**
+
+1. Place `unifi_sysvinit_all.deb` (10.4.x sysvinit variant) in the repo root.
+2. Download `mongodb-org-server_8.0.7_amd64.deb` (or any 8.0.x build) from `repo.mongodb.org/apt/ubuntu/dists/noble/mongodb-org/8.0/multiverse/binary-amd64/` and place it in the repo root.
+
+**Run.**
+
+```pwsh
+PS> containerizer build .\unifi_sysvinit_all.deb `
+        --name unifi `
+        --installer .\mongodb-org-server_8.0.7_amd64.deb `
+        --keep-intermediates --skip-verify
+```
+
+**Acceptance.**
+
+- Build exits 0.
+- `out/unifi/.intermediates/trace/original/install.log` shows `apt-get install` succeeding for both packages.
+- `out/unifi/README.md` includes an `## Install inputs` section listing both debs.
+- `out/unifi/seccomp.json` exists. (Containerfile + Quadlet depend on entrypoint detection — may still be SKIPPED if the postinst doesn't expose a daemon under sleep-infinity; document whichever outcome.)
+
+## Scenario 13 — Real UniFi via `--apt-source` against `repo.mongodb.org`
+
+**Goal.** Same UniFi install but using the upstream MongoDB Inc repo signed with their official key. Validates `--apt-source` + `--apt-key` end-to-end against a real third-party repo.
+
+**Setup.**
+
+1. `unifi_sysvinit_all.deb` in repo root.
+2. Download the MongoDB Inc GPG key:
+   ```pwsh
+   PS> Invoke-WebRequest https://www.mongodb.org/static/pgp/server-8.0.asc `
+           -OutFile .\mongodb-server-8.0.asc
+   ```
+
+**Run.**
+
+```pwsh
+PS> containerizer build .\unifi_sysvinit_all.deb `
+        --name unifi `
+        --apt-source 'deb [signed-by=/etc/apt/keyrings/mongodb-server-8.0.asc] https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse' `
+        --apt-key .\mongodb-server-8.0.asc `
+        --keep-intermediates --skip-verify
+```
+
+**Acceptance.**
+
+- Build exits 0.
+- `apt-prep.log` shows the keyring `cp -f` and the sources.list write.
+- `install.log` shows apt fetching `mongodb-org-server` from `repo.mongodb.org`.
+- README's `## Install inputs` lists the apt-source with `[signed-by=…]` stripped.

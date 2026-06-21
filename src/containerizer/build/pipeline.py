@@ -32,10 +32,10 @@ def run_pipeline(
     config: BuildConfig,
     *,
     probe_fn: Callable[[Path, str | None], ProbeResult],
-    install_trace_fn: Callable[[Path, str | None, Path], int],
+    install_trace_fn: Callable[..., int],
     parse_trace_fn: Callable[[Path], TraceJson],
     derive_policy_fn: Callable[[TraceJson], PolicyJson],
-    generate_fn: Callable[[PolicyJson, str, Path], None],
+    generate_fn: Callable[..., None],
     podman_build_fn: Callable[[Path, str], Path],
     verify_trace_fn: Callable[[Path, list[str], str, int, Path], int],
     diff_fn: Callable[[TraceJson, TraceJson], VerifyReport],
@@ -54,7 +54,14 @@ def run_pipeline(
     # 2. install trace
     _say(stderr, "[trace]    running installer trace")
     layout.trace_original_dir.mkdir(parents=True, exist_ok=True)
-    install_trace_fn(config.installer, config.start_cmd, layout.trace_original_dir)
+    install_trace_fn(
+        config.installer,
+        config.start_cmd,
+        layout.trace_original_dir,
+        extra_installers=config.extra_installers,
+        apt_sources=config.apt_sources,
+        apt_keys=config.apt_keys,
+    )
     marker = _read_install_marker(layout.trace_original_dir)
     if marker == "PARTIAL":
         warnings.append("install trace finalised as PARTIAL")
@@ -72,7 +79,14 @@ def run_pipeline(
     # 4. generate
     _say(stderr, f"[generate] writing artifacts to {layout.final_dir}")
     layout.final_dir.mkdir(parents=True, exist_ok=True)
-    generate_fn(policy, config.name, layout.final_dir)
+    generate_fn(
+        policy,
+        config.name,
+        layout.final_dir,
+        install_primary=config.installer,
+        install_extras=config.extra_installers,
+        install_apt_sources=config.apt_sources,
+    )
 
     # 4a. sentinel
     if policy.image.entrypoint == [SENTINEL_ENTRYPOINT]:

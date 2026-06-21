@@ -26,6 +26,11 @@ class BuildConfig(BaseModel):
     skip_verify: bool = False
     debug: bool = False
 
+    # Issue #102.
+    extra_installers: tuple[Path, ...] = ()
+    apt_sources: tuple[str, ...] = ()
+    apt_keys: tuple[Path, ...] = ()
+
 
 class BuildResult(BaseModel):
     """Structured result of a successful `run_pipeline` invocation."""
