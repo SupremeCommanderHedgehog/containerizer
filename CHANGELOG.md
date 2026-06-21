@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.6.0...v0.7.0) (2026-06-21)
+
+
+### Features
+
+* **trace,build:** multi-deb input + apt sources ([#103](https://github.com/SupremeCommanderHedgehog/containerizer/issues/103)) ([d9e01f6](https://github.com/SupremeCommanderHedgehog/containerizer/commit/d9e01f6b7dff316611f4399bcd09c6ea81d29ca2))
+
 ## [0.6.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.5.0...v0.6.0) (2026-06-21)
 
 
