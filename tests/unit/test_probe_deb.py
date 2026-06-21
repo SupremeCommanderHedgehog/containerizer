@@ -9,6 +9,7 @@ from containerizer.probe.deb import (
     _extract_control,
     _iter_ar_members,
     _parse_control,
+    probe_deb,
 )
 from tests.fixtures.probe.deb_helpers import build_minimal_deb
 
@@ -100,3 +101,22 @@ def test_discover_systemd_units_finds_units_in_usr_lib_and_dedups(
     )
     units = _discover_systemd_units(deb)
     assert units == ["alpha.service", "beta.service"]
+
+
+def test_probe_deb_returns_populated_DebProbe(hello_deb: Path) -> None:
+    probe = probe_deb(hello_deb)
+    assert probe.package == "hello"
+    assert probe.version == "2.10-3"
+    assert probe.arch == "amd64"
+    assert probe.depends == ["libc6 (>= 2.34)"]
+    assert probe.maintainer == "Test <test@example.com>"
+    assert probe.description is not None and probe.description.startswith("test package")
+    assert probe.systemd_units == ["hello.service"]
+
+
+def test_probe_deb_handles_missing_optional_fields(tmp_path: Path) -> None:
+    spartan = tmp_path / "spartan.deb"
+    build_minimal_deb(spartan, depends="", systemd_unit=None)
+    probe = probe_deb(spartan)
+    assert probe.depends == []
+    assert probe.systemd_units == []

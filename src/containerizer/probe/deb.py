@@ -13,6 +13,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO
 
+from containerizer.probe.schema import DebProbe
+
 _AR_MAGIC = b"!<arch>\n"
 _AR_HEADER_LEN = 60
 
@@ -141,3 +143,30 @@ def _discover_systemd_units(deb_path: Path) -> list[str]:
                 if basename and basename not in units:
                     units.append(basename)
     return sorted(units)
+
+
+def probe_deb(path: Path) -> DebProbe:
+    """Parse a Debian .deb and return a typed DebProbe."""
+    text = _extract_control(path)
+    fields = _parse_control(text)
+
+    def _split(value: str) -> list[str]:
+        return [s.strip() for s in value.split(",") if s.strip()] if value else []
+
+    description = fields.get("Description")
+    if description is not None:
+        # Keep only the first paragraph; multi-line description's
+        # first newline already separates summary from extended text.
+        description = description.splitlines()[0] if description else None
+
+    return DebProbe(
+        package=fields["Package"],
+        version=fields["Version"],
+        arch=fields["Architecture"],
+        depends=_split(fields.get("Depends", "")),
+        pre_depends=_split(fields.get("Pre-Depends", "")),
+        recommends=_split(fields.get("Recommends", "")),
+        maintainer=fields.get("Maintainer"),
+        description=description,
+        systemd_units=_discover_systemd_units(path),
+    )
