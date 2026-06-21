@@ -259,16 +259,22 @@ run_deb_install() {
     # First-run pull of ubuntu:24.04. Cached on subsequent runs.
     podman pull docker.io/library/ubuntu:24.04 > "$TRACE_DIR/deb-pull.log" 2>&1
 
-    # Start a long-lived nested ubuntu container with systemd as PID 1.
-    # --network=host shares the nested container's netns with the outer
-    # trace runner. --privileged so apt can write to /var/cache and
-    # postinst can adjust sysctl/nftables if asked.
+    # Nested install container: plain sleep-forever ubuntu:24.04.
+    # We don't boot systemd here (would need Delegate=yes on the outer
+    # containerizer-trace.service plus a working cgroup-v2 delegation
+    # chain). Ubuntu's /usr/sbin/policy-rc.d returns 101 in non-systemd
+    # containers so postinst's `systemctl start` no-ops cleanly without
+    # crashing the install. Trade-off: daemon-shaped packages install
+    # but the daemon is NOT running inside the nested container -- the
+    # user can't smoke-test a live daemon via `podman exec deb-install
+    # <cmd>`. Trace integration (test fixture, CI) doesn't care because
+    # PHASE_MARKER finalises immediately on non-interactive runs.
     podman run -d --rm --name deb-install \
-        --systemd=always --privileged \
-        --cgroupns=private \
+        --privileged \
         --network=host \
         -v "$INSTALLER:/installer:ro" \
         docker.io/library/ubuntu:24.04 \
+        sleep infinity \
         > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err"
 
     # Extend the INT/TERM trap so Ctrl-C during install does not leak the

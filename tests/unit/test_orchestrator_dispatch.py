@@ -101,7 +101,7 @@ run_deb_install
     joined = "\n".join(recorded)
     assert "pull docker.io/library/ubuntu:24.04" in joined
     assert "run -d --rm --name deb-install" in joined
-    assert "--systemd=always" in joined
-    assert "--cgroupns=private" in joined
+    assert "--privileged" in joined
+    assert "sleep infinity" in joined
     assert "exec deb-install" in joined
     assert "stop -t 10 deb-install" in joined

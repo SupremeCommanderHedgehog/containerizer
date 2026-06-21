@@ -163,20 +163,25 @@ run_deb_install() {
     # runtime policy by the analyzer's existing phase split.
     podman pull docker.io/library/ubuntu:24.04 > "$TRACE_DIR/deb-pull.log" 2>&1
 
-    # Start a long-lived nested ubuntu container with systemd as PID 1.
+    # Start a long-lived nested ubuntu container. We do NOT boot systemd
+    # inside it (see "--systemd=always" key choice below for rationale).
     # --network=host shares the nested container's network ns with the
     # outer trace runner. --privileged so apt can write to /var/cache and
-    # postinst can adjust sysctl/nftables if asked.
+    # postinst can adjust sysctl/nftables if asked. `sleep infinity` keeps
+    # the container alive for `podman exec` to drive the install.
     podman run -d --rm --name deb-install \
-        --systemd=always --privileged \
+        --privileged \
         --network=host \
         -v "$INSTALLER:/installer:ro" \
         docker.io/library/ubuntu:24.04 \
+        sleep infinity \
         > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err"
 
-    # Run apt install inside the nested container. systemd is PID 1 there,
-    # so postinst's systemctl start works. Runs synchronously (foreground);
-    # apt-get -y needs no stdin, so the #95 `<&0` issue does not apply.
+    # Run apt install inside the nested container. No systemd PID 1; Ubuntu
+    # ships /usr/sbin/policy-rc.d that returns 101 in non-systemd containers,
+    # so postinst's `systemctl start <unit>` no-ops cleanly without crashing
+    # the install. Runs synchronously (foreground); apt-get -y needs no
+    # stdin, so the #95 `<&0` issue does not apply.
     podman exec deb-install bash -c '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update &&
@@ -216,7 +221,7 @@ Key choices:
 
 - **`--rm` on the nested container** — orchestrator owns lifecycle; the container is throwaway. If `podman stop` fails (e.g., user already killed it), `--rm` still cleans up.
 - **`--network=host`** (nested → outer) — the nested install container shares the outer trace runner's network namespace. The outer runner today does not itself use `--network=host` (`src/containerizer/trace/runner.py:95-118`), so this does not magically expose the daemon's ports on the user's host. The user smoke-tests via `podman exec deb-install <cmd>` from a second host shell, OR by running `podman exec -it <runner-name> nmap-ncat / curl` against the nested daemon. This is the same ergonomic cliff that exists for ELF installs today; the spec calls it out but does not solve it. See known risk §7.7 for a follow-up issue suggesting `--network=host` (or `-p`) at the outer-runner level.
-- **`--systemd=always`** — necessary so deb postinst's `systemctl start <unit>` works. Without this, packages like nginx, redis, postgresql would install cleanly but the service wouldn't be running for the user to smoke-test.
+- **No `--systemd=always` (implementation reality).** Conceptually `--systemd=always` is the "right" way to run the nested install container, so postinst's `systemctl start <unit>` actually starts the daemon. In practice the trace-integration CI (GitHub-hosted Ubuntu runner) consistently failed with `container state improper` on `podman exec` even with `--cgroupns=private`: nested-systemd needs a working cgroup-v2 delegation chain (`Delegate=yes` on the outer `containerizer-trace.service` plus matching delegation through the runner-image systemd-as-PID-1 stack), and that chain is fragile across host kernels. Instead, the shipped implementation runs a plain `sleep infinity ubuntu:24.04` container and relies on Ubuntu's `/usr/sbin/policy-rc.d` (which returns 101 in non-systemd containers) to make postinst's `systemctl start` no-op cleanly. **Trade-off:** daemon-shaped packages install but the daemon is NOT started inside the nested container — the user can't smoke-test a running daemon via `podman exec deb-install <cmd>`. **Follow-up:** if real-time daemon smoke-testing matters, a future change can add `Delegate=yes` to `containerizer-trace.service` and re-enable `--systemd=always` + `--cgroupns=private`. Tracked as a follow-up issue.
 - **`--privileged`** — needed because some debs (e.g., kernel modules, networking tools) call privileged syscalls during postinst. The outer trace container is already `--privileged`; the nested one needs to be too for consistent behavior.
 - **Network access during `apt-get update`** — apt fetches the index from Ubuntu archives, then downloads any uncached `Depends`. All of this is on the install side of `PHASE_MARKER`, so the analyzer's existing phase split excludes it from policy.
 - **No fallback strace targeting** — for ELF the orchestrator spawns one `strace -p <installer_pid>` per failed collector. For deb the installer's `pid` is `podman exec`'s pid, which is nearly useless to strace. We accept the loss: if a collector fails to attach for a deb run, the user sees the gap in `FALLBACKS.json` and re-runs after fixing the kernel headers / BTF situation. Documented as known risk §7.
@@ -276,7 +281,7 @@ End-to-end install flow:
 | `apt-get update` fails (no network in runner) | `install_rc != 0`, `install.status=failed`, nested container stopped, PARTIAL marker, exit 0. Host wrapper surfaces "deb install failed; check network in trace runner". |
 | `apt-get install` fails (missing dep, wrong arch, broken postinst) | Same as above. `install.log` has dpkg's output for debugging. |
 | Nested container fails to start (image missing, podman storage issue) | `podman run -d` returns non-zero; `deb-install.err` captures the reason; PARTIAL + exit 0. Host wrapper surfaces. |
-| Postinst fails partway (e.g., `systemctl start` errors) | apt-get exits non-zero. Same failure path. |
+| Postinst fails partway (e.g., file install error, dependency-script crash) | apt-get exits non-zero. Same failure path. (`systemctl start` errors are not in this row: Ubuntu's policy-rc.d makes them no-op in our non-systemd nested container.) |
 | User presses Ctrl-C during install | Extended trap (per §3.3 note) fires `podman stop deb-install` then `finalize_marker PARTIAL` then exit 0. `--rm` cleans up the nested container after stop. PARTIAL marker visible to host. |
 | Deb installs but ships no systemd unit (library-only deb, one-shot CLI) | apt succeeds, PHASE_MARKER written, user has nothing to smoke-test. User can either exercise the CLI manually inside the nested container (`podman exec deb-install <cmd>`) or press Enter immediately. Runtime trace will be near-empty; generated policy will be the deny-by-default baseline. Documented in generated README. |
 | ubuntu:24.04 image not in runner storage (image rebuilt without pre-pull) | `podman run` pulls during the trace, adding 10-30s of install-phase noise. Functionally correct, just slower. Falls under existing install-side activity that PHASE_MARKER filters. |
@@ -347,7 +352,7 @@ Run `containerizer build` against a real package — `nginx-light` is small (~3 
 2. **Strace fallback degraded for deb mode.** The orchestrator can't usefully target a single pid for strace when the install runs as `podman exec` inside a nested container. If bpftrace/bcc collectors fail to attach, the deb run will have a more sparse trace than the ELF equivalent. Mitigation: surface this in the host wrapper's error path; suggest the user check kernel headers / BTF before re-running.
 3. **User-Ctrl-C must not leak the nested container.** The shipped orchestrator's INT trap (trace-orchestrator.sh:107) does not know about `deb-install`. Mitigation in §3.3: deb branch installs a wider trap that stops `deb-install` before finalising PARTIAL. Trivial, but explicitly called out as a tasking line item so the implementer doesn't skip it.
 4. **Library-only debs produce empty runtime traces and useless generated policy.** Not a bug, but a UX cliff: a user runs `containerizer build libfoo.deb` expecting something useful and gets a deny-by-default container with nothing to do. Mitigation: probe-time warning when `DebProbe.systemd_units` is empty AND the deb's data.tar contains no executable under `usr/{,s}bin/`. Documented in §2 out-of-scope.
-5. **Nested-podman cgroup delegation.** Mirrors issue #90 risk #1. If verify-mode already works under the systemd-PID-1 runner, install-mode nested podman should too. Same `--cgroupns=private` fallback applies.
+5. **Nested-podman cgroup delegation.** Mirrors issue #90 risk #1. **Materialised in CI.** Initial implementation used `--systemd=always` on the nested container; trace-integration CI consistently failed with `Error: can only create exec sessions on running containers: container state improper` on `podman exec` even after adding `--cgroupns=private`. Root cause: nested-systemd needs `Delegate=yes` on the outer `containerizer-trace.service` plus a working cgroup-v2 delegation chain through the runner-image systemd-as-PID-1 stack. Mitigation shipped: drop `--systemd=always` and `--cgroupns=private`; run a plain `sleep infinity ubuntu:24.04` container and let Ubuntu's `/usr/sbin/policy-rc.d` (returns 101 in non-systemd containers) no-op postinst's `systemctl start`. Trade-off: daemon-shaped packages install but the daemon is NOT running for `podman exec`-based smoke-testing — see §3.3. Deferred work: a follow-up issue can add `Delegate=yes` to `containerizer-trace.service` and re-enable the nested-systemd path so real-time daemon smoke-testing returns.
 6. **Interaction with issue #90 (systemd as PID 1).** Already shipped via PR #96 (boot systemd) and PR #97 (UniFi Y/N stdin fix). This spec's orchestrator changes are written against that world: `run_deb_install` consumes the existing `$interactive` variable; `CONTAINERIZER_INTERACTIVE` flows through the env-publisher unit the same as ELF's interactive flag. No conflict.
 7. **Smoke-test ergonomics are awkward.** Without `--network=host` or `-p <port>` on the outer trace runner, the user cannot reach the nested daemon's ports from their host; they have to chain `podman exec` calls. Same cliff exists for ELF today, so this issue does not regress UX, but it's worth filing a follow-up to either add `--network=host` to the outer trace runner or expose a `containerizer trace --publish <port>` flag.
 
