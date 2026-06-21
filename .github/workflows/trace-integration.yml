@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - 'sandbox/**'
+      - 'src/containerizer/build/**'
+      - 'src/containerizer/probe/**'
       - 'src/containerizer/trace/**'
+      - 'tests/integration/build/**'
       - 'tests/integration/trace/**'
       - 'tests/fixtures/trace/**'
       - '.github/workflows/trace-integration.yml'
@@ -14,7 +17,10 @@ on:
     branches: [main]
     paths:
       - 'sandbox/**'
+      - 'src/containerizer/build/**'
+      - 'src/containerizer/probe/**'
       - 'src/containerizer/trace/**'
+      - 'tests/integration/build/**'
       - 'tests/integration/trace/**'
       - 'tests/fixtures/trace/**'
       - '.github/workflows/trace-integration.yml'
