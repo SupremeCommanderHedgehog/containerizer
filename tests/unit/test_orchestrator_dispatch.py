@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -55,3 +56,51 @@ def test_detect_kind_unknown(tmp_path: Path) -> None:
     other = tmp_path / "x"
     other.write_bytes(b"\x00" * 32)
     assert _source_detect_kind(other) == "unknown"
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_run_deb_install_invokes_expected_podman_argv(tmp_path: Path) -> None:
+    """Source run_deb_install with a podman stub on PATH and verify the
+    recorded argv contains pull, run -d, exec, stop."""
+
+    deb = tmp_path / "x.deb"
+    deb.write_bytes(b"!<arch>\n" + b"\x00" * 32)
+    log = tmp_path / "podman-stub.log"
+    trace_dir = tmp_path / "trace"
+    trace_dir.mkdir()
+
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir()
+    shutil.copy("tests/fixtures/trace/podman-stub.sh", stub_dir / "podman")
+    (stub_dir / "podman").chmod(0o755)
+
+    env = {
+        **os.environ,
+        "PATH": f"{stub_dir.as_posix()}:{os.environ['PATH']}",
+        "PODMAN_STUB_LOG": str(log),
+        "INSTALLER": str(deb),
+        "TRACE_DIR": str(trace_dir),
+    }
+
+    script = f"""
+set -e
+# Define a no-op finalize_marker so run_deb_install can call it
+# without depending on the rest of the orchestrator.
+finalize_marker() {{ : ; }}
+# Source only run_deb_install from the orchestrator script.
+source <(awk '/^run_deb_install\\(\\) /,/^}}$/' {ORCH.as_posix()})
+run_deb_install
+"""
+    subprocess.run(
+        ["bash", "-c", script],
+        env=env,
+        check=True,
+    )
+
+    recorded = log.read_text().splitlines()
+    joined = "\n".join(recorded)
+    assert "pull docker.io/library/ubuntu:24.04" in joined
+    assert "run -d --rm --name deb-install" in joined
+    assert "--systemd=always" in joined
+    assert "exec deb-install" in joined
+    assert "stop -t 10 deb-install" in joined
