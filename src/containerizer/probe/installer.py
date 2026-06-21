@@ -1,8 +1,9 @@
 """Installer kind detection and probe dispatch.
 
-For v0.0.x only ELF binaries are supported. Detection for other kinds is
-implemented (so the CLI can surface a clear error), but probing them raises
-``UnsupportedInstallerKind`` until later milestones add their parsers.
+ELF binaries and Debian `.deb` packages are supported. Other kinds
+(RPM, AppImage, shell, tarball) are detected so the CLI can surface
+a clear error, but probing them raises ``UnsupportedInstallerKind``
+until later milestones add their parsers.
 """
 
 from __future__ import annotations
