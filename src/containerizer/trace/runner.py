@@ -69,8 +69,7 @@ class TraceRunner:
                 raise ValueError(f"verify mode requires: {', '.join(missing)}")
             if self.extra_installers or self.apt_sources or self.apt_keys:
                 raise ValueError(
-                    "verify mode does not accept extra installers, apt sources, "
-                    "or apt keys"
+                    "verify mode does not accept extra installers, apt sources, or apt keys"
                 )
 
     def argv(self) -> list[str]:
