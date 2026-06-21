@@ -1,15 +1,39 @@
 """Base-image suggestion derived from probe metadata.
 
-The picker is intentionally conservative: choose an Ubuntu LTS whose glibc is
-new enough to run the binary. The user can always override with --base-image.
+The picker is intentionally conservative: choose an Ubuntu LTS whose glibc
+is new enough to run the binary (ELF), or whose package universe matches the
+deb's declared architecture (Debian package).
 """
 
 from __future__ import annotations
 
-from containerizer.probe.schema import BaseImageSuggestion, ElfProbe
+from containerizer.probe.schema import BaseImageSuggestion, DebProbe, ElfProbe
 
 
-def suggest_base_image(elf: ElfProbe) -> BaseImageSuggestion:
+def suggest_base_image(probe: ElfProbe | DebProbe) -> BaseImageSuggestion:
+    if isinstance(probe, DebProbe):
+        return _suggest_for_deb(probe)
+    return _suggest_for_elf(probe)
+
+
+_SUPPORTED_DEB_ARCHS = {"amd64", "arm64", "all"}
+
+
+def _suggest_for_deb(deb: DebProbe) -> BaseImageSuggestion:
+    if deb.arch not in _SUPPORTED_DEB_ARCHS:
+        raise ValueError(
+            f"unsupported .deb architecture {deb.arch!r}; supported: "
+            f"{sorted(_SUPPORTED_DEB_ARCHS)}"
+        )
+    reasons: list[str] = []
+    if deb.arch == "all":
+        reasons.append("architecture-independent deb; picked ubuntu:24.04 LTS")
+    else:
+        reasons.append(f"deb architecture {deb.arch}; picked ubuntu:24.04 LTS")
+    return BaseImageSuggestion(image="ubuntu:24.04", reasons=reasons)
+
+
+def _suggest_for_elf(elf: ElfProbe) -> BaseImageSuggestion:
     reasons: list[str] = []
     image = _pick_for_glibc(elf.glibc_min, reasons)
     reasons.append(f"architecture: {elf.arch}")

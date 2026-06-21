@@ -3,7 +3,7 @@
 import pytest
 
 from containerizer.probe.base_image import suggest_base_image
-from containerizer.probe.schema import ElfProbe
+from containerizer.probe.schema import DebProbe, ElfProbe
 
 
 def _elf(glibc: str | None) -> ElfProbe:
@@ -49,3 +49,24 @@ def test_suggest_base_image_includes_arch_reason() -> None:
     elf = _elf("2.35")
     result = suggest_base_image(elf)
     assert any("x86_64" in r for r in result.reasons)
+
+
+def _deb(arch: str) -> DebProbe:
+    return DebProbe(package="x", version="1", arch=arch)
+
+
+@pytest.mark.parametrize(
+    "arch", ["amd64", "arm64", "all"],
+)
+def test_suggest_base_image_for_deb_supported_archs(arch: str) -> None:
+    deb = _deb(arch)
+    result = suggest_base_image(deb)
+    assert result.image == "ubuntu:24.04"
+    assert any(arch in r or "architecture-independent" in r for r in result.reasons)
+
+
+@pytest.mark.parametrize("arch", ["i386", "armhf", "ppc64el"])
+def test_suggest_base_image_for_deb_unsupported_archs_raises(arch: str) -> None:
+    deb = _deb(arch)
+    with pytest.raises(ValueError, match=arch):
+        suggest_base_image(deb)
