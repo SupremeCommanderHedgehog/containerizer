@@ -269,13 +269,34 @@ run_deb_install() {
     # user can't smoke-test a live daemon via `podman exec deb-install
     # <cmd>`. Trace integration (test fixture, CI) doesn't care because
     # PHASE_MARKER finalises immediately on non-interactive runs.
+    run_rc=0
     podman run -d --rm --name deb-install \
         --privileged \
         --network=host \
         -v "$INSTALLER:/installer:ro" \
         docker.io/library/ubuntu:24.04 \
         sleep infinity \
-        > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err"
+        > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err" || run_rc=$?
+
+    # Capture state for post-mortem if anything below fails. Always written.
+    {
+        echo "=== run exit code: $run_rc ==="
+        echo "=== podman version ==="
+        podman version 2>&1 || true
+        echo "=== podman info (driver) ==="
+        podman info --format '{{.Store.GraphDriverName}} {{.Host.CgroupVersion}} {{.Host.CgroupManager}}' 2>&1 || true
+        echo "=== ps -a ==="
+        podman ps -a 2>&1 || true
+        echo "=== inspect deb-install ==="
+        podman inspect deb-install 2>&1 | head -200 || true
+        echo "=== logs deb-install ==="
+        podman logs deb-install 2>&1 | head -50 || true
+        echo "=== deb-install.cid contents ==="
+        cat "$TRACE_DIR/deb-install.cid" 2>&1 || true
+        echo "=== deb-install.err contents ==="
+        cat "$TRACE_DIR/deb-install.err" 2>&1 || true
+    } > "$TRACE_DIR/deb-debug.log" 2>&1
+    echo "trace-orchestrator: nested container run rc=$run_rc; debug at $TRACE_DIR/deb-debug.log" >&2
 
     # Extend the INT/TERM trap so Ctrl-C during install does not leak the
     # nested container. The outer trap (set at line ~107 of this script)

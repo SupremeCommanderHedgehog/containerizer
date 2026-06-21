@@ -105,3 +105,6 @@ run_deb_install
     assert "sleep infinity" in joined
     assert "exec deb-install" in joined
     assert "stop -t 10 deb-install" in joined
+    # Diagnostic dump (#99) should fire unconditionally, recording at least
+    # the `ps -a` probe in the stub log.
+    assert "ps -a" in joined
