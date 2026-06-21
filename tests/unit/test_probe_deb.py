@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 
 from containerizer.probe.deb import (
+    _discover_systemd_units,
     _extract_control,
     _iter_ar_members,
     _parse_control,
@@ -66,3 +67,14 @@ def test_extract_control_reads_control_file_from_hello_deb(hello_deb: Path) -> N
     text = _extract_control(hello_deb)
     assert "Package: hello" in text
     assert "Architecture: amd64" in text
+
+
+def test_discover_systemd_units_finds_lib_systemd_unit(hello_deb: Path) -> None:
+    units = _discover_systemd_units(hello_deb)
+    assert units == ["hello.service"]
+
+
+def test_discover_systemd_units_empty_when_no_units(tmp_path: Path) -> None:
+    bare = tmp_path / "bare.deb"
+    build_minimal_deb(bare, systemd_unit=None)
+    assert _discover_systemd_units(bare) == []

@@ -111,3 +111,33 @@ def _extract_control(deb_path: Path) -> str:
                     )
                 return fp.read().decode("utf-8", errors="replace")
     raise ValueError(f"no `control` file in control.tar of {deb_path}")
+
+
+def _discover_systemd_units(deb_path: Path) -> list[str]:
+    """Scan data.tar.* for systemd unit files under lib/systemd/system/
+    or usr/lib/systemd/system/. Returns basenames sorted for determinism.
+    """
+    with deb_path.open("rb") as fh:
+        members = list(_iter_ar_members(fh))
+        data = next(
+            (m for m in members if m.name.startswith("data.tar")),
+            None,
+        )
+        if data is None:
+            return []
+        fh.seek(data.offset)
+        blob = fh.read(data.size)
+
+    units: list[str] = []
+    with tarfile.open(fileobj=io.BytesIO(blob)) as tf:
+        for member in tf:
+            if not member.isfile():
+                continue
+            name = member.name.lstrip("./")
+            if name.startswith("lib/systemd/system/") or name.startswith(
+                "usr/lib/systemd/system/"
+            ):
+                basename = name.rsplit("/", 1)[-1]
+                if basename and basename not in units:
+                    units.append(basename)
+    return sorted(units)
