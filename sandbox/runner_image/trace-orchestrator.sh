@@ -104,6 +104,25 @@ finalize_marker() {
     : > "$TRACE_DIR/$marker"
 }
 
+_detect_kind() {
+    # Echo one of: elf, deb, unknown. Reads the first 8 bytes.
+    # Note: $(...) strips trailing newlines, which can clip the 8th byte of
+    # the deb magic (!<arch>\n). Matching just the "!<arch>" prefix is
+    # sufficient -- no ELF or other relevant kind starts with "!".
+    local path="$1"
+    local head
+    head=$(dd if="$path" bs=8 count=1 2>/dev/null)
+    if [[ "$head" == $'\x7fELF'* ]]; then
+        echo "elf"
+        return
+    fi
+    if [[ "$head" == "!<arch>"* ]]; then
+        echo "deb"
+        return
+    fi
+    echo "unknown"
+}
+
 trap 'finalize_marker PARTIAL; exit 0' INT TERM
 
 # After the 2s attach grace, check whether each collector is still alive.
