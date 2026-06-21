@@ -250,3 +250,50 @@ def test_verify_mode_also_allocates_tty(tmp_path: Path) -> None:
     argv = runner.argv()
     assert "-i" in argv
     assert "-t" in argv
+
+
+def test_verify_mode_rejects_extra_installers(tmp_path: Path) -> None:
+    """Issue #102: extras only make sense in install mode."""
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"\x00")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}")
+    out = tmp_path / "out"
+    out.mkdir()
+    extra = tmp_path / "extra.deb"
+    extra.write_bytes(b"!<arch>\n")
+
+    with pytest.raises(ValueError, match="verify mode does not accept extra"):
+        TraceRunner(
+            image_tag="runner",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            verify_image_tar=image_tar,
+            verify_image_tag="img:tag",
+            verify_soak_seconds=10,
+            verify_seccomp_path=seccomp,
+            extra_installers=(extra,),
+        )
+
+
+def test_verify_mode_rejects_apt_sources(tmp_path: Path) -> None:
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"\x00")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    with pytest.raises(ValueError, match="verify mode does not accept extra"):
+        TraceRunner(
+            image_tag="runner",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            verify_image_tar=image_tar,
+            verify_image_tag="img:tag",
+            verify_soak_seconds=10,
+            verify_seccomp_path=seccomp,
+            apt_sources=("deb http://x noble main",),
+        )

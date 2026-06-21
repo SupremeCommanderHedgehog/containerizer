@@ -38,6 +38,11 @@ class TraceRunner:
     # verify mode (which is non-interactive by design).
     tty: bool = False
 
+    # Issue #102: install-mode only; ignored (must be empty) in verify mode.
+    extra_installers: tuple[Path, ...] = ()
+    apt_sources: tuple[str, ...] = ()
+    apt_keys: tuple[Path, ...] = ()
+
     # Verify-mode-only fields. All default to None; validated in __post_init__.
     verify_image_tar: Path | None = None
     verify_image_tag: str | None = None
@@ -62,6 +67,11 @@ class TraceRunner:
             ]
             if missing:
                 raise ValueError(f"verify mode requires: {', '.join(missing)}")
+            if self.extra_installers or self.apt_sources or self.apt_keys:
+                raise ValueError(
+                    "verify mode does not accept extra installers, apt sources, "
+                    "or apt keys"
+                )
 
     def argv(self) -> list[str]:
         """Pure: returns the podman command without executing it."""
