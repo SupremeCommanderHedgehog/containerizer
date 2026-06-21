@@ -86,3 +86,64 @@ def test_trace_completes_for_minimal_deb(tmp_path: Path) -> None:
     except AssertionError:
         _dump_trace_dir(out, reason="assertion failure")
         raise
+
+
+@pytest.mark.integration
+def test_multi_deb_install_satisfies_dep(tmp_path: Path) -> None:
+    """Issue #102: primary that Depends: dep_pkg gets resolved when --installer
+    supplies dep_pkg.deb in the same transaction."""
+    dep = tmp_path / "deppkg_1.0_amd64.deb"
+    build_minimal_deb(
+        dep,
+        package="deppkg",
+        version="1.0",
+        depends="",
+        systemd_unit=None,
+    )
+    primary = tmp_path / "primarypkg_1.0_amd64.deb"
+    build_minimal_deb(
+        primary,
+        package="primarypkg",
+        version="1.0",
+        depends="deppkg",
+        systemd_unit=None,
+    )
+
+    out = tmp_path / "trace"
+    out.mkdir()
+
+    try:
+        result = subprocess.run(
+            [
+                "containerizer",
+                "trace",
+                str(primary),
+                "--installer",
+                str(dep),
+                "-o",
+                str(out),
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=600,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _dump_trace_dir(out, reason=f"TimeoutExpired after {exc.timeout}s")
+        raise
+
+    if result.returncode != 0:
+        _dump_trace_dir(out, reason=f"returncode={result.returncode}")
+        raise AssertionError(
+            f"containerizer trace exited {result.returncode}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+
+    try:
+        assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr was:\n{result.stderr}"
+        install_log = (out / "install.log").read_text(errors="replace")
+        assert "primarypkg" in install_log, install_log[:500]
+        assert "deppkg" in install_log, install_log[:500]
+    except AssertionError:
+        _dump_trace_dir(out, reason="multi-deb assertion failure")
+        raise
