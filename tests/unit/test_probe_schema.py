@@ -84,8 +84,6 @@ def test_deb_probe_round_trips_through_json() -> None:
         version="2.10-3",
         arch="amd64",
         depends=["libc6 (>= 2.34)"],
-        pre_depends=[],
-        recommends=[],
         maintainer="Santiago Vila <sanvila@debian.org>",
         description="example package",
         systemd_units=["hello.service"],
@@ -95,10 +93,19 @@ def test_deb_probe_round_trips_through_json() -> None:
     assert restored == probe
 
 
-def test_deb_probe_rejects_extra_fields() -> None:
-    import pytest
-    from pydantic import ValidationError
+def test_deb_probe_defaults_lists_to_empty() -> None:
+    """Verify default_factory=list actually produces empty lists when
+    Depends / Pre-Depends / Recommends / systemd_units are omitted."""
+    probe = DebProbe(package="x", version="1", arch="amd64")
+    assert probe.depends == []
+    assert probe.pre_depends == []
+    assert probe.recommends == []
+    assert probe.systemd_units == []
+    assert probe.maintainer is None
+    assert probe.description is None
 
+
+def test_deb_probe_rejects_extra_fields() -> None:
     with pytest.raises(ValidationError):
         DebProbe.model_validate(
             {
