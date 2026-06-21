@@ -5,7 +5,10 @@ on:
     branches: [main]
     paths:
       - 'sandbox/**'
+      - 'src/containerizer/build/**'
+      - 'src/containerizer/probe/**'
       - 'src/containerizer/trace/**'
+      - 'tests/integration/build/**'
       - 'tests/integration/trace/**'
       - 'tests/fixtures/trace/**'
       - '.github/workflows/trace-integration.yml'
@@ -14,7 +17,10 @@ on:
     branches: [main]
     paths:
       - 'sandbox/**'
+      - 'src/containerizer/build/**'
+      - 'src/containerizer/probe/**'
       - 'src/containerizer/trace/**'
+      - 'tests/integration/build/**'
       - 'tests/integration/trace/**'
       - 'tests/fixtures/trace/**'
       - '.github/workflows/trace-integration.yml'
@@ -100,7 +106,7 @@ jobs:
             sudo tail -c 3000 "$f"
             echo
           done
-          for f in "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl; do
+          for f in "$d"/install.log "$d"/FALLBACKS.json "$d"/installer.exitcode "$d"/install.status "$d"/*.jsonl "$d"/deb-debug.log "$d"/deb-install.err "$d"/deb-install.cid "$d"/deb-pull.log; do
             [ -e "$f" ] || continue
             echo "--- $(basename "$f") ---"
             sudo head -c 4000 "$f"

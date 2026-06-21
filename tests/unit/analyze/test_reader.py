@@ -110,11 +110,36 @@ def test_jsonl_with_non_json_lines_are_skipped(tmp_path: Path) -> None:
     assert bundle.events["open"][0]["path"] == "/a"
 
 
-def test_malformed_json_inside_brace_line_is_hard_error(tmp_path: Path) -> None:
+def test_malformed_json_inside_brace_line_is_skipped(tmp_path: Path) -> None:
+    """Lines that start with '{' but fail json.loads are now skipped with a
+    warning to stderr, not raised. bpftrace occasionally emits stray escape
+    sequences in paths/comm fields when the kernel surfaces non-ASCII bytes."""
     d = _make_complete_trace(tmp_path)
     (d / "open.jsonl").write_text("{not really json\n", encoding="utf-8")
-    with pytest.raises(json.JSONDecodeError):
-        read_trace_dir(d)
+    bundle = read_trace_dir(d)
+    assert bundle.events["open"] == []
+
+
+def test_parse_jsonl_skips_lines_with_invalid_json_escapes(tmp_path: Path) -> None:
+    """bpftrace sometimes emits paths or comm fields with stray
+    backslash sequences (e.g. \\x.. or bare \\ before a non-escape
+    char). _parse_jsonl should skip the bad line and continue."""
+    from containerizer.analyze.reader import _parse_jsonl
+
+    jsonl = tmp_path / "open.jsonl"
+    jsonl.write_text(
+        # First line: valid.
+        '{"ts_ns": 1, "path": "/usr/bin/ok"}\n'
+        # Second line: bare backslash before a literal letter (invalid JSON).
+        '{"ts_ns": 2, "path": "/bad\\path"}\n'
+        # Third line: valid again.
+        '{"ts_ns": 3, "path": "/usr/bin/ok2"}\n',
+        encoding="utf-8",
+    )
+    events = _parse_jsonl(jsonl)
+    assert len(events) == 2
+    assert events[0]["ts_ns"] == 1
+    assert events[1]["ts_ns"] == 3
 
 
 def test_bind_fallback_log_is_parsed_into_events(tmp_path: Path) -> None:

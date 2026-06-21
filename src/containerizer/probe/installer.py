@@ -1,8 +1,9 @@
 """Installer kind detection and probe dispatch.
 
-For v0.0.x only ELF binaries are supported. Detection for other kinds is
-implemented (so the CLI can surface a clear error), but probing them raises
-``UnsupportedInstallerKind`` until later milestones add their parsers.
+ELF binaries and Debian `.deb` packages are supported. Other kinds
+(RPM, AppImage, shell, tarball) are detected so the CLI can surface
+a clear error, but probing them raises ``UnsupportedInstallerKind``
+until later milestones add their parsers.
 """
 
 from __future__ import annotations
@@ -10,6 +11,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from containerizer.probe.base_image import suggest_base_image
+from containerizer.probe.deb import probe_deb
 from containerizer.probe.elf import probe_elf
 from containerizer.probe.schema import InstallerKind, ProbeResult
 
@@ -52,14 +54,14 @@ def detect_kind(path: Path) -> InstallerKind:
 
 
 def probe(path: Path) -> ProbeResult:
-    """Probe *path* and return a typed ``ProbeResult``.
-
-    Only :class:`InstallerKind.elf` is implemented for now; everything else
-    raises :class:`UnsupportedInstallerKind` with a clear message.
-    """
+    """Probe *path* and return a typed ``ProbeResult``."""
     kind = detect_kind(path)
     if kind is InstallerKind.elf:
         elf = probe_elf(path)
         base = suggest_base_image(elf)
         return ProbeResult(kind=kind, arch=elf.arch, elf=elf, base_image=base)
+    if kind is InstallerKind.deb:
+        deb = probe_deb(path)
+        base = suggest_base_image(deb)
+        return ProbeResult(kind=kind, arch=deb.arch, deb=deb, base_image=base)
     raise UnsupportedInstallerKind(kind, path)

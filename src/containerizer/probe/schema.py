@@ -38,6 +38,21 @@ class BaseImageSuggestion(BaseModel):
     reasons: list[str]
 
 
+class DebProbe(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    schema_version: int = 1
+    package: str
+    version: str
+    arch: str
+    depends: list[str] = Field(default_factory=list)
+    pre_depends: list[str] = Field(default_factory=list)
+    recommends: list[str] = Field(default_factory=list)
+    maintainer: str | None = None
+    description: str | None = None
+    systemd_units: list[str] = Field(default_factory=list)
+
+
 class ProbeResult(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -45,4 +60,5 @@ class ProbeResult(BaseModel):
     kind: InstallerKind
     arch: str | None = None
     elf: ElfProbe | None = None
+    deb: DebProbe | None = None
     base_image: BaseImageSuggestion
