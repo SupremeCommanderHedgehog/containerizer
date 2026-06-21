@@ -248,8 +248,97 @@ run_elf_install() {
     echo "trace-orchestrator: COMPLETE" >&2
 }
 
+run_deb_install() {
+    # .deb install workload (#99). Runs apt-get install inside a nested
+    # ubuntu:24.04 container under --systemd=always so postinst's
+    # `systemctl start <unit>` actually works. Collectors observe events
+    # on the outer Fedora kernel and see the nested container's syscalls
+    # natively. Install-phase activity (pull, apt-get update, dpkg) lands
+    # before PHASE_MARKER and the analyzer excludes it from runtime policy.
+
+    # First-run pull of ubuntu:24.04. Cached on subsequent runs.
+    podman pull docker.io/library/ubuntu:24.04 > "$TRACE_DIR/deb-pull.log" 2>&1
+
+    # Start a long-lived nested ubuntu container with systemd as PID 1.
+    # --network=host shares the nested container's netns with the outer
+    # trace runner. --privileged so apt can write to /var/cache and
+    # postinst can adjust sysctl/nftables if asked.
+    podman run -d --rm --name deb-install \
+        --systemd=always --privileged \
+        --network=host \
+        -v "$INSTALLER:/installer:ro" \
+        docker.io/library/ubuntu:24.04 \
+        > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err"
+
+    # Extend the INT/TERM trap so Ctrl-C during install does not leak the
+    # nested container. The outer trap (set at line ~107 of this script)
+    # already fires finalize_marker PARTIAL; we add `podman stop` in front.
+    trap 'podman stop -t 2 deb-install >/dev/null 2>&1 || true; finalize_marker PARTIAL; exit 0' INT TERM
+
+    # Sync apt + install /installer inside the nested container. apt-get
+    # runs synchronously (foreground); `apt-get -y` needs no stdin so the
+    # #95 `<&0` redirect required for backgrounded interactive installers
+    # does not apply.
+    #
+    # Note: under `set -e`, a non-zero exit from podman exec would abort
+    # the script BEFORE we capture $?. Use `|| install_rc=$?` to
+    # short-circuit set -e, matching the pattern in run_elf_install
+    # (`install_rc=0; wait ... || install_rc=$?`).
+    install_rc=0
+    podman exec deb-install bash -c '
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update &&
+        apt-get install -y /installer
+    ' > "$TRACE_DIR/install.log" 2>&1 || install_rc=$?
+    echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
+
+    if (( install_rc != 0 )); then
+        echo "failed" > "$TRACE_DIR/install.status"
+        podman stop -t 5 deb-install >/dev/null 2>&1 || true
+        echo "trace-orchestrator: deb install failed (rc=$install_rc); finalising PARTIAL" >&2
+        finalize_marker PARTIAL
+        exit 0
+    fi
+
+    awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
+        > "$TRACE_DIR/PHASE_MARKER"
+
+    if [[ -n "${CONTAINERIZER_INTERACTIVE:-}" ]]; then
+        interactive="${CONTAINERIZER_INTERACTIVE}"
+    elif [[ -t 1 ]]; then
+        interactive=1
+    else
+        interactive=0
+    fi
+
+    if [[ "$interactive" == 1 ]]; then
+        echo "trace-orchestrator: deb installed. exercise the software (podman exec deb-install <cmd>), then press <Enter> here to finalise." >&2
+        read -r _ || true
+    else
+        echo "trace-orchestrator: deb installed (non-interactive); finalising" >&2
+    fi
+
+    podman stop -t 10 deb-install >/dev/null 2>&1 || true
+    finalize_marker COMPLETE
+    echo "trace-orchestrator: COMPLETE" >&2
+}
+
 if [[ "$MODE" == "install" ]]; then
-    run_elf_install
+    INSTALLER_KIND="$(_detect_kind "$INSTALLER")"
+    echo "trace-orchestrator: installer kind=$INSTALLER_KIND" >&2
+    case "$INSTALLER_KIND" in
+        elf)
+            run_elf_install
+            ;;
+        deb)
+            run_deb_install
+            ;;
+        *)
+            echo "trace-orchestrator: unsupported installer kind: $INSTALLER_KIND" >&2
+            finalize_marker PARTIAL
+            exit 0
+            ;;
+    esac
 else
     # ---- M6 verify-mode workload ----
     echo "trace-orchestrator: dispatching to verify-orchestrator (mode=verify)" >&2
