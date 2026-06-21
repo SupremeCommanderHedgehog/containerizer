@@ -265,8 +265,23 @@ def _default_derive_policy_fn(trace: TraceJson) -> PolicyJson:
     return derive_policy(trace, warnings=list(trace.warnings))
 
 
-def _default_generate_fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
-    unknown_ids = generate_all(policy, name, final_dir)
+def _default_generate_fn(
+    policy: PolicyJson,
+    name: str,
+    final_dir: Path,
+    *,
+    install_primary: Path | None = None,
+    install_extras: tuple[Path, ...] = (),
+    install_apt_sources: tuple[str, ...] = (),
+) -> None:
+    unknown_ids = generate_all(
+        policy,
+        name,
+        final_dir,
+        install_primary=install_primary,
+        install_extras=install_extras,
+        install_apt_sources=install_apt_sources,
+    )
     if unknown_ids:
         click.echo(
             f"warning: syscall IDs not in bundled table "

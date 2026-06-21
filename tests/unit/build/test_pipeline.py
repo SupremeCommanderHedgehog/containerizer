@@ -138,8 +138,16 @@ def _derive_policy(c: Calls, policy: PolicyJson) -> Callable[[TraceJson], Policy
     return fn
 
 
-def _generate(c: Calls, layout: PathLayout) -> Callable[[PolicyJson, str, Path], None]:
-    def fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
+def _generate(c: Calls, layout: PathLayout) -> Callable[..., None]:
+    def fn(
+        policy: PolicyJson,
+        name: str,
+        final_dir: Path,
+        *,
+        install_primary: Path | None = None,
+        install_extras: tuple[Path, ...] = (),
+        install_apt_sources: tuple[str, ...] = (),
+    ) -> None:
         c.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
         (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
@@ -525,7 +533,15 @@ def test_missing_readme_after_generate_raises_clear_error(tmp_path: Path) -> Non
     layout = _build_layout(tmp_path)
     layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_without_readme(policy: PolicyJson, name: str, final_dir: Path) -> None:
+    def generate_without_readme(
+        policy: PolicyJson,
+        name: str,
+        final_dir: Path,
+        *,
+        install_primary: Path | None = None,
+        install_extras: tuple[Path, ...] = (),
+        install_apt_sources: tuple[str, ...] = (),
+    ) -> None:
         calls.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
         (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")

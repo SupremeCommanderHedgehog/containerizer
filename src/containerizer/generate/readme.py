@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 from containerizer.analyze.schema import PolicyJson, PolicyRuntime
+
+_APT_BRACKET_OPTS = re.compile(r"\[[^\]]*\]\s*")
 
 
 def render_readme(
@@ -11,6 +16,9 @@ def render_readme(
     *,
     skipped: bool,
     unknown_syscall_ids: list[int],
+    install_primary: Path | None = None,
+    install_extras: tuple[Path, ...] = (),
+    install_apt_sources: tuple[str, ...] = (),
 ) -> str:
     """Render the README.md describing the generated artifacts.
 
@@ -37,6 +45,9 @@ def render_readme(
 
     sections.append(_render_what_was_generated(name, skipped))
     sections.append(_render_audit_trail(policy.warnings))
+    install_inputs = _render_install_inputs(install_primary, install_extras, install_apt_sources)
+    if install_inputs:
+        sections.append(install_inputs)
     sections.append(_render_runtime_allowlist(runtime))
     if unknown_syscall_ids:
         sections.append(_render_unknown_syscalls(unknown_syscall_ids))
@@ -63,6 +74,35 @@ def _render_audit_trail(warnings: list[str]) -> str:
     if not warnings:
         return body + "(no warnings from the analyzer)\n"
     return body + "\n".join(f"- {w}" for w in warnings) + "\n"
+
+
+def _render_install_inputs(
+    primary: Path | None,
+    extras: tuple[Path, ...],
+    apt_sources: tuple[str, ...],
+) -> str:
+    """Render the 'Install inputs' section. Returns '' when nothing to render."""
+    if primary is None and not extras and not apt_sources:
+        return ""
+    lines = ["## Install inputs\n"]
+    if primary is not None:
+        lines.append("Primary installer:")
+        lines.append(f"- `{primary.name}`")
+        lines.append("")
+    if extras:
+        lines.append("Additional installers:")
+        for p in extras:
+            lines.append(f"- `{p.name}`")
+        lines.append("")
+    if apt_sources:
+        lines.append("apt sources:")
+        for src in apt_sources:
+            # Strip [bracket-options] so we don't leak [signed-by=…] or
+            # [trusted=yes] into user-facing output.
+            cleaned = _APT_BRACKET_OPTS.sub("", src).strip()
+            lines.append(f"- `{cleaned}`")
+        lines.append("")
+    return "\n".join(lines)
 
 
 def _render_runtime_allowlist(runtime: PolicyRuntime) -> str:
