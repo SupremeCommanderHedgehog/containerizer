@@ -56,7 +56,8 @@ def _deb(arch: str) -> DebProbe:
 
 
 @pytest.mark.parametrize(
-    "arch", ["amd64", "arm64", "all"],
+    "arch",
+    ["amd64", "arm64", "all"],
 )
 def test_suggest_base_image_for_deb_supported_archs(arch: str) -> None:
     deb = _deb(arch)

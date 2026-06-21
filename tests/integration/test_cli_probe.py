@@ -31,8 +31,8 @@ def test_cli_probe_writes_output_file(fixtures_dir: Path, tmp_path: Path) -> Non
 
 
 def test_cli_probe_unsupported_kind_exits_nonzero(tmp_path: Path) -> None:
-    f = tmp_path / "wat.deb"
-    f.write_bytes(b"!<arch>\n")
+    f = tmp_path / "wat.rpm"
+    f.write_bytes(b"\xed\xab\xee\xdb")
     runner = CliRunner()
     result = runner.invoke(main, ["probe", str(f)])
     assert result.exit_code != 0

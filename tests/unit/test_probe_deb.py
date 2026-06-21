@@ -134,9 +134,7 @@ def test_probe_deb_raises_on_missing_required_control_field(tmp_path: Path) -> N
     from tests.fixtures.probe.deb_helpers import _ar_append, _make_tar_gz
 
     deb = tmp_path / "broken.deb"
-    control_tar = _make_tar_gz(
-        {"control": b"Version: 1\nArchitecture: amd64\n\n"}
-    )
+    control_tar = _make_tar_gz({"control": b"Version: 1\nArchitecture: amd64\n\n"})
     data_tar = _make_tar_gz({"./usr/bin/x": b"#!/bin/sh\n"})
     buf = io.BytesIO()
     buf.write(b"!<arch>\n")

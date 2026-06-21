@@ -108,9 +108,7 @@ def _extract_control(deb_path: Path) -> str:
             if member.name in ("control", "./control"):
                 fp = tf.extractfile(member)
                 if fp is None:
-                    raise ValueError(
-                        f"control entry is not a regular file: {deb_path}"
-                    )
+                    raise ValueError(f"control entry is not a regular file: {deb_path}")
                 return fp.read().decode("utf-8", errors="replace")
     raise ValueError(f"no `control` file in control.tar of {deb_path}")
 
@@ -136,9 +134,7 @@ def _discover_systemd_units(deb_path: Path) -> list[str]:
             if not member.isfile():
                 continue
             name = member.name.removeprefix("./")
-            if name.startswith("lib/systemd/system/") or name.startswith(
-                "usr/lib/systemd/system/"
-            ):
+            if name.startswith("lib/systemd/system/") or name.startswith("usr/lib/systemd/system/"):
                 basename = name.rsplit("/", 1)[-1]
                 if basename and basename not in units:
                     units.append(basename)
@@ -155,9 +151,7 @@ def probe_deb(path: Path) -> DebProbe:
 
     missing = [k for k in _REQUIRED_CONTROL_FIELDS if k not in fields]
     if missing:
-        raise ValueError(
-            f"control file missing required fields {missing}: {path}"
-        )
+        raise ValueError(f"control file missing required fields {missing}: {path}")
 
     def _split(value: str) -> list[str]:
         return [s.strip() for s in value.split(",") if s.strip()] if value else []

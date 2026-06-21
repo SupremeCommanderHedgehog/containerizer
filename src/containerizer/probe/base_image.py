@@ -22,8 +22,7 @@ _SUPPORTED_DEB_ARCHS = {"amd64", "arm64", "all"}
 def _suggest_for_deb(deb: DebProbe) -> BaseImageSuggestion:
     if deb.arch not in _SUPPORTED_DEB_ARCHS:
         raise ValueError(
-            f"unsupported .deb architecture {deb.arch!r}; supported: "
-            f"{sorted(_SUPPORTED_DEB_ARCHS)}"
+            f"unsupported .deb architecture {deb.arch!r}; supported: {sorted(_SUPPORTED_DEB_ARCHS)}"
         )
     reasons: list[str] = []
     if deb.arch == "all":

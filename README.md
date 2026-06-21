@@ -69,8 +69,8 @@ Write the same JSON to a file instead:
 PS> containerizer probe .\some-installer.bin -o .\probe.json
 ```
 
-Only ELF binaries are supported in v0.0.x. Other installer kinds (`.deb`,
-`.rpm`, AppImage, shell, tarball) are detected but probing them raises a
+ELF binaries and `.deb` packages are supported. Other installer kinds
+(`.rpm`, AppImage, shell, tarball) are detected but probing them raises a
 clear error until later releases add their parsers.
 
 ## License
