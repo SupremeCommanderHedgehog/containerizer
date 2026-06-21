@@ -38,6 +38,11 @@ class TraceRunner:
     # verify mode (which is non-interactive by design).
     tty: bool = False
 
+    # Issue #102: install-mode only; ignored (must be empty) in verify mode.
+    extra_installers: tuple[Path, ...] = ()
+    apt_sources: tuple[str, ...] = ()
+    apt_keys: tuple[Path, ...] = ()
+
     # Verify-mode-only fields. All default to None; validated in __post_init__.
     verify_image_tar: Path | None = None
     verify_image_tag: str | None = None
@@ -62,6 +67,10 @@ class TraceRunner:
             ]
             if missing:
                 raise ValueError(f"verify mode requires: {', '.join(missing)}")
+            if self.extra_installers or self.apt_sources or self.apt_keys:
+                raise ValueError(
+                    "verify mode does not accept extra installers, apt sources, or apt keys"
+                )
 
     def argv(self) -> list[str]:
         """Pure: returns the podman command without executing it."""
@@ -118,6 +127,19 @@ class TraceRunner:
             "/usr/src:/usr/src:ro",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
+            # Issue #102: extras at /installer-NN.deb (zero-padded for stable
+            # glob expansion: /installer-??.deb).
+            *(
+                arg
+                for i, extra in enumerate(self.extra_installers, start=1)
+                for arg in ("-v", f"{extra.resolve()}:/installer-{i:02d}.deb:ro")
+            ),
+            # Issue #102: apt-keys mounted at /work/apt-keys/<basename>.
+            *(
+                arg
+                for key in self.apt_keys
+                for arg in ("-v", f"{key.resolve()}:/work/apt-keys/{key.name}:ro")
+            ),
             "-v",
             f"{self.output_dir.resolve()}:/work/trace",
             "-e",
@@ -126,6 +148,10 @@ class TraceRunner:
             "CONTAINERIZER_INSTALLER=/installer",
             "-e",
             f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
+            # Issue #102: apt-source lines are transported via a file written by
+            # run() to output_dir/apt-sources.list (mounted at
+            # /work/trace/apt-sources.list inside the runner). Env-var transport
+            # truncates at the first NUL byte; file transport doesn't.
             self.image_tag,
         ]
 
@@ -187,5 +213,16 @@ class TraceRunner:
 
     def run(self) -> int:
         """Exec the podman command in the foreground."""
+        self._materialize_apt_sources_file()
         result = subprocess.run(self.argv(), check=False)
         return result.returncode
+
+    def _materialize_apt_sources_file(self) -> None:
+        """Write apt_sources to output_dir / 'apt-sources.list' so the
+        orchestrator can read them inside the runner. Env-var transport
+        truncates at the first NUL byte; file transport doesn't."""
+        if not self.apt_sources:
+            return
+        target = self.output_dir / "apt-sources.list"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join(self.apt_sources) + "\n", encoding="utf-8")

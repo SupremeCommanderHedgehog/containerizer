@@ -25,7 +25,15 @@ from containerizer.generate.readme import render_readme
 from containerizer.generate.seccomp import render_seccomp
 
 
-def generate_all(policy: PolicyJson, name: str, out_dir: Path) -> list[int]:
+def generate_all(
+    policy: PolicyJson,
+    name: str,
+    out_dir: Path,
+    *,
+    install_primary: Path | None = None,
+    install_extras: tuple[Path, ...] = (),
+    install_apt_sources: tuple[str, ...] = (),
+) -> list[int]:
     """Render the M4 artifact set into `out_dir`.
 
     Writes:
@@ -55,7 +63,15 @@ def generate_all(policy: PolicyJson, name: str, out_dir: Path) -> list[int]:
         )
 
     (out_dir / "README.md").write_text(
-        render_readme(policy, name, skipped=is_sentinel, unknown_syscall_ids=unknown_ids),
+        render_readme(
+            policy,
+            name,
+            skipped=is_sentinel,
+            unknown_syscall_ids=unknown_ids,
+            install_primary=install_primary,
+            install_extras=install_extras,
+            install_apt_sources=install_apt_sources,
+        ),
         encoding="utf-8",
     )
 

@@ -250,3 +250,142 @@ def test_verify_mode_also_allocates_tty(tmp_path: Path) -> None:
     argv = runner.argv()
     assert "-i" in argv
     assert "-t" in argv
+
+
+def test_verify_mode_rejects_extra_installers(tmp_path: Path) -> None:
+    """Issue #102: extras only make sense in install mode."""
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"\x00")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}")
+    out = tmp_path / "out"
+    out.mkdir()
+    extra = tmp_path / "extra.deb"
+    extra.write_bytes(b"!<arch>\n")
+
+    with pytest.raises(ValueError, match="verify mode does not accept extra"):
+        TraceRunner(
+            image_tag="runner",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            verify_image_tar=image_tar,
+            verify_image_tag="img:tag",
+            verify_soak_seconds=10,
+            verify_seccomp_path=seccomp,
+            extra_installers=(extra,),
+        )
+
+
+def test_verify_mode_rejects_apt_sources(tmp_path: Path) -> None:
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"\x00")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    with pytest.raises(ValueError, match="verify mode does not accept extra"):
+        TraceRunner(
+            image_tag="runner",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            verify_image_tar=image_tar,
+            verify_image_tag="img:tag",
+            verify_soak_seconds=10,
+            verify_seccomp_path=seccomp,
+            apt_sources=("deb http://x noble main",),
+        )
+
+
+def test_install_argv_mounts_extras_zero_padded(tmp_path: Path) -> None:
+    """Issue #102: extras land at /installer-NN.deb in user-supplied order."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    extra1 = tmp_path / "dep1.deb"
+    extra1.write_bytes(b"!<arch>\n")
+    extra2 = tmp_path / "dep2.deb"
+    extra2.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        extra_installers=(extra1, extra2),
+    )
+    argv = runner.argv()
+
+    assert f"{extra1.resolve()}:/installer-01.deb:ro" in argv
+    assert f"{extra2.resolve()}:/installer-02.deb:ro" in argv
+    # Primary stays where it was.
+    assert f"{installer.resolve()}:/installer:ro" in argv
+
+
+def test_install_argv_mounts_apt_keys_by_basename(tmp_path: Path) -> None:
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    key = tmp_path / "mongo.gpg"
+    key.write_bytes(b"\x00")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        apt_keys=(key,),
+    )
+    argv = runner.argv()
+
+    assert f"{key.resolve()}:/work/apt-keys/mongo.gpg:ro" in argv
+
+
+def test_run_writes_apt_sources_list_to_output_dir(tmp_path: Path, monkeypatch) -> None:
+    """Issue #102: apt_sources land in output_dir/apt-sources.list (file
+    transport; env-var NUL truncation avoided)."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        apt_sources=("deb http://a noble main", "deb http://b noble main"),
+    )
+
+    # Don't actually exec podman; just trigger the materialize step.
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    runner.run()
+
+    sources_file = out / "apt-sources.list"
+    assert sources_file.exists()
+    text = sources_file.read_text(encoding="utf-8")
+    assert text == "deb http://a noble main\ndeb http://b noble main\n"
+
+
+def test_run_does_not_write_apt_sources_when_empty(tmp_path: Path, monkeypatch) -> None:
+    """Single-installer flows produce no apt-sources.list."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+    )
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    runner.run()
+
+    assert not (out / "apt-sources.list").exists()

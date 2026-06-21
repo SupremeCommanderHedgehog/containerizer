@@ -23,6 +23,7 @@ from containerizer.generate.orchestrator import generate_all
 from containerizer.probe.installer import UnsupportedInstallerKind
 from containerizer.probe.installer import probe as probe_installer
 from containerizer.probe.schema import BaseImageSuggestion, ProbeResult
+from containerizer.trace.cli import _validate_multi_deb_flags
 from containerizer.trace.image import RunnerImage
 from containerizer.trace.runner import TraceRunner
 from containerizer.verify.diff import diff_traces
@@ -76,6 +77,27 @@ class PreflightError(RuntimeError):
     is_flag=True,
     help="On first phase failure, drop a shell in the runner if alive.",
 )
+@click.option(
+    "--installer",
+    "extra_installers",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    help="Additional .deb installed in same apt transaction as primary. Repeatable; cap 99.",
+)
+@click.option(
+    "--apt-source",
+    "apt_sources",
+    multiple=True,
+    type=str,
+    help="Verbatim 'deb …' line written to /etc/apt/sources.list.d/containerizer.list. Repeatable.",
+)
+@click.option(
+    "--apt-key",
+    "apt_keys",
+    multiple=True,
+    type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
+    help="Keyring file (.gpg or .asc) copied into /etc/apt/keyrings/. Repeatable.",
+)
 def build_cmd(
     installer: Path,
     name: str,
@@ -86,9 +108,13 @@ def build_cmd(
     verify_soak_seconds: int,
     skip_verify: bool,
     debug: bool,
+    extra_installers: tuple[Path, ...],
+    apt_sources: tuple[str, ...],
+    apt_keys: tuple[Path, ...],
 ) -> None:
     """Run the full pipeline: probe -> trace -> analyze -> generate ->
     rebuild -> retrace -> verify into one directory."""
+    _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
     try:
         preflight_podman()
     except PreflightError as exc:
@@ -105,6 +131,9 @@ def build_cmd(
         verify_soak_seconds=verify_soak_seconds,
         skip_verify=skip_verify,
         debug=debug,
+        extra_installers=tuple(p.resolve() for p in extra_installers),
+        apt_sources=apt_sources,
+        apt_keys=tuple(p.resolve() for p in apt_keys),
     )
 
     if start_cmd is not None:
@@ -206,6 +235,10 @@ def _default_install_trace_fn(
     installer: Path,
     start_cmd: str | None,  # reserved for future orchestrator env wiring
     output_dir: Path,
+    *,
+    extra_installers: tuple[Path, ...] = (),
+    apt_sources: tuple[str, ...] = (),
+    apt_keys: tuple[Path, ...] = (),
 ) -> int:
     image = RunnerImage(sandbox_dir=_sandbox_dir())
     if not image.exists():
@@ -217,6 +250,9 @@ def _default_install_trace_fn(
         installer=installer.resolve(),
         output_dir=output_dir.resolve(),
         tty=sys.stdin.isatty(),
+        extra_installers=extra_installers,
+        apt_sources=apt_sources,
+        apt_keys=apt_keys,
     )
     return runner.run()
 
@@ -229,8 +265,23 @@ def _default_derive_policy_fn(trace: TraceJson) -> PolicyJson:
     return derive_policy(trace, warnings=list(trace.warnings))
 
 
-def _default_generate_fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
-    unknown_ids = generate_all(policy, name, final_dir)
+def _default_generate_fn(
+    policy: PolicyJson,
+    name: str,
+    final_dir: Path,
+    *,
+    install_primary: Path | None = None,
+    install_extras: tuple[Path, ...] = (),
+    install_apt_sources: tuple[str, ...] = (),
+) -> None:
+    unknown_ids = generate_all(
+        policy,
+        name,
+        final_dir,
+        install_primary=install_primary,
+        install_extras=install_extras,
+        install_apt_sources=install_apt_sources,
+    )
     if unknown_ids:
         click.echo(
             f"warning: syscall IDs not in bundled table "

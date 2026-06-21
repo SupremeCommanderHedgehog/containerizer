@@ -107,10 +107,13 @@ def _probe(c: Calls) -> Callable[[Path, str | None], ProbeResult]:
     return fn
 
 
-def _install_trace_writing_complete(
-    c: Calls, layout: PathLayout
-) -> Callable[[Path, str | None, Path], int]:
-    def fn(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+def _install_trace_writing_complete(c: Calls, layout: PathLayout) -> Callable[..., int]:
+    def fn(
+        installer: Path,
+        start_cmd: str | None,
+        output_dir: Path,
+        **_kwargs: object,
+    ) -> int:
         c.order.append("install_trace")
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "COMPLETE").write_text("", encoding="utf-8")
@@ -135,8 +138,16 @@ def _derive_policy(c: Calls, policy: PolicyJson) -> Callable[[TraceJson], Policy
     return fn
 
 
-def _generate(c: Calls, layout: PathLayout) -> Callable[[PolicyJson, str, Path], None]:
-    def fn(policy: PolicyJson, name: str, final_dir: Path) -> None:
+def _generate(c: Calls, layout: PathLayout) -> Callable[..., None]:
+    def fn(
+        policy: PolicyJson,
+        name: str,
+        final_dir: Path,
+        *,
+        install_primary: Path | None = None,
+        install_extras: tuple[Path, ...] = (),
+        install_apt_sources: tuple[str, ...] = (),
+    ) -> None:
         c.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
         (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
@@ -301,7 +312,12 @@ def test_install_trace_neither_complete_nor_partial_raises(tmp_path: Path) -> No
     layout = _build_layout(tmp_path)
     layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
 
-    def install_no_marker(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+    def install_no_marker(
+        installer: Path,
+        start_cmd: str | None,
+        output_dir: Path,
+        **_kwargs: object,
+    ) -> int:
         calls.order.append("install_trace")
         layout.trace_original_dir.mkdir(parents=True, exist_ok=True)
         return 1
@@ -327,7 +343,12 @@ def test_install_trace_partial_marker_emits_warning(tmp_path: Path) -> None:
     layout = _build_layout(tmp_path)
     layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
 
-    def install_partial(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+    def install_partial(
+        installer: Path,
+        start_cmd: str | None,
+        output_dir: Path,
+        **_kwargs: object,
+    ) -> int:
         calls.order.append("install_trace")
         output_dir.mkdir(parents=True, exist_ok=True)
         (output_dir / "PARTIAL").write_text("", encoding="utf-8")
@@ -512,7 +533,15 @@ def test_missing_readme_after_generate_raises_clear_error(tmp_path: Path) -> Non
     layout = _build_layout(tmp_path)
     layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
 
-    def generate_without_readme(policy: PolicyJson, name: str, final_dir: Path) -> None:
+    def generate_without_readme(
+        policy: PolicyJson,
+        name: str,
+        final_dir: Path,
+        *,
+        install_primary: Path | None = None,
+        install_extras: tuple[Path, ...] = (),
+        install_apt_sources: tuple[str, ...] = (),
+    ) -> None:
         calls.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
         (final_dir / "Containerfile").write_text("FROM scratch\n", encoding="utf-8")
@@ -573,3 +602,63 @@ def test_verify_trace_ran_and_died_continues_with_warning(tmp_path: Path) -> Non
     assert result.verify is not None
     assert any("RAN_AND_DIED" in w or "exited during soak" in w for w in result.warnings)
     assert "diff" in calls.order
+
+
+def test_pipeline_passes_multi_deb_fields_to_install_trace_fn(tmp_path: Path) -> None:
+    """Issue #102: run_pipeline must thread BuildConfig.extra_installers,
+    apt_sources, and apt_keys through to the ORIGINAL install_trace_fn
+    invocation as keyword arguments. The sentinel-entrypoint policy makes
+    the pipeline short-circuit before verify, so we only see the original
+    install call (which is what should receive these fields)."""
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    extra = tmp_path / "extra.deb"
+    key = tmp_path / "repo.gpg"
+    sources = ("deb http://x noble main",)
+
+    captured: dict[str, object] = {}
+
+    def install_capturing(
+        installer: Path,
+        start_cmd: str | None,
+        output_dir: Path,
+        **kwargs: object,
+    ) -> int:
+        calls.order.append("install_trace")
+        captured.update(kwargs)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "COMPLETE").write_text("", encoding="utf-8")
+        return 0
+
+    cfg = _cfg(
+        tmp_path,
+        extra_installers=(extra,),
+        apt_sources=sources,
+        apt_keys=(key,),
+    )
+
+    run_pipeline(
+        cfg,
+        probe_fn=_probe(calls),
+        install_trace_fn=install_capturing,
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy([SENTINEL_ENTRYPOINT])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+
+    assert captured == {
+        "extra_installers": (extra,),
+        "apt_sources": sources,
+        "apt_keys": (key,),
+    }
+    # Sentinel policy means verify is skipped -- install_trace runs exactly
+    # once (for the ORIGINAL trace) and never again for verify retrace.
+    assert calls.order.count("install_trace") == 1
+    assert "verify_trace" not in calls.order

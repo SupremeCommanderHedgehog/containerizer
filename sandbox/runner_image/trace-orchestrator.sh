@@ -274,11 +274,36 @@ run_deb_install() {
     # `/installer` apt treats it as a package name and fails with
     # `E: Unsupported file /installer given on commandline`. The
     # OUTER /installer mount (from the host wrapper) is unchanged.
+    # Issue #102: collect extras + keys mounted by the outer runner. The outer
+    # TraceRunner argv (trace/runner.py) puts extras at /installer-NN.deb and
+    # keys at /work/apt-keys/<basename>. Re-mount into the nested container at
+    # the same paths so apt-prep + apt-install can find them. `shopt -s
+    # nullglob` is required because each glob expands at this scope: without
+    # it, `/installer-??.deb` would expand to itself literally when no extras
+    # are present and we'd try to mount a non-existent path.
+    extra_mounts=()
+    shopt -s nullglob
+    for f in /installer-??.deb; do
+        extra_mounts+=(-v "$f:$f:ro")
+    done
+    for f in /work/apt-keys/*; do
+        extra_mounts+=(-v "$f:$f:ro")
+    done
+    # Issue #102: apt-sources are transported via a file written by the host
+    # CLI to output_dir/apt-sources.list (visible here at
+    # /work/trace/apt-sources.list since output_dir is bind-mounted at
+    # /work/trace). Re-mount it into the nested container so apt-prep can read
+    # it. Env-var transport truncated multi-source input at the first NUL byte.
+    if [ -e /work/trace/apt-sources.list ]; then
+        extra_mounts+=(-v "/work/trace/apt-sources.list:/work/trace/apt-sources.list:ro")
+    fi
+
     run_rc=0
     podman run -d --rm --name deb-install \
         --privileged \
         --network=host \
         -v "$INSTALLER:/installer.deb:ro" \
+        "${extra_mounts[@]}" \
         docker.io/library/ubuntu:24.04 \
         sleep infinity \
         > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err" || run_rc=$?
@@ -317,11 +342,30 @@ run_deb_install() {
     # the script BEFORE we capture $?. Use `|| install_rc=$?` to
     # short-circuit set -e, matching the pattern in run_elf_install
     # (`install_rc=0; wait ... || install_rc=$?`).
+    # Issue #102: apt-source + keyring prep. No-op when neither was passed
+    # (the for-loop over /work/apt-keys/* hits a missing dir guard, and the
+    # apt-sources.list file check is false). Runs BEFORE apt-get update so
+    # the new sources are visible to the index refresh.
+    podman exec deb-install bash -c '
+        set -e
+        install -dv /etc/apt/keyrings /etc/apt/sources.list.d
+        if [ -d /work/apt-keys ]; then
+            for key in /work/apt-keys/*; do
+                [ -e "$key" ] || continue
+                cp -fv "$key" "/etc/apt/keyrings/$(basename "$key")"
+            done
+        fi
+        if [ -e /work/trace/apt-sources.list ]; then
+            cp -fv /work/trace/apt-sources.list /etc/apt/sources.list.d/containerizer.list
+        fi
+    ' > "$TRACE_DIR/apt-prep.log" 2>&1
+
     install_rc=0
     podman exec deb-install bash -c '
+        shopt -s nullglob
         export DEBIAN_FRONTEND=noninteractive
         apt-get update &&
-        apt-get install -y /installer.deb
+        apt-get install -y /installer.deb /installer-??.deb
     ' > "$TRACE_DIR/install.log" 2>&1 || install_rc=$?
     echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
