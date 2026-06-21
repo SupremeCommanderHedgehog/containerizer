@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.5.0...v0.6.0) (2026-06-21)
+
+
+### Features
+
+* **probe,trace:** Debian .deb installer support ([#100](https://github.com/SupremeCommanderHedgehog/containerizer/issues/100)) ([195c681](https://github.com/SupremeCommanderHedgehog/containerizer/commit/195c681cbf674fb75da9648c978ae34b18440f9c))
+
 ## [0.5.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.4.0...v0.5.0) (2026-06-11)
 
 
