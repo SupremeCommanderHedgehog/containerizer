@@ -143,8 +143,9 @@ done
     printf "}\n"
 } > "$TRACE_DIR/FALLBACKS.json"
 
-if [[ "$MODE" == "install" ]]; then
-    # ---- existing M2 install-mode workload ----
+run_elf_install() {
+    # ---- existing M2 install-mode workload, extracted into a function
+    # so Phase 3 can dispatch between ELF and .deb installer kinds.
     echo "trace-orchestrator: running installer $INSTALLER" >&2
 
     # Decide interactive vs non-interactive. Under systemd-PID-1 (#90) the
@@ -226,6 +227,10 @@ if [[ "$MODE" == "install" ]]; then
     fi
     finalize_marker COMPLETE
     echo "trace-orchestrator: COMPLETE" >&2
+}
+
+if [[ "$MODE" == "install" ]]; then
+    run_elf_install
 else
     # ---- M6 verify-mode workload ----
     echo "trace-orchestrator: dispatching to verify-orchestrator (mode=verify)" >&2
