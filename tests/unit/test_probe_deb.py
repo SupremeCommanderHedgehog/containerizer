@@ -49,9 +49,10 @@ def test_parse_control_extracts_required_fields() -> None:
     assert fields["Version"] == "2.10-3"
     assert fields["Architecture"] == "amd64"
     assert fields["Depends"] == "libc6 (>= 2.34)"
-    # Multi-line Description: first line + continuation lines preserved.
+    # Multi-line Description: first line + both continuation lines preserved.
     assert "first line" in fields["Description"]
     assert "continuation 1" in fields["Description"]
+    assert "continuation 2" in fields["Description"]
 
 
 def test_parse_control_stops_at_blank_line() -> None:
