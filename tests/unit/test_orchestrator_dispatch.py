@@ -184,5 +184,5 @@ run_deb_install
     assert "containerizer.list" in joined  # sources file write
     assert "/work/apt-keys" in joined  # source dir mention
     assert "/installer-??.deb" in joined  # zero-padded glob in install cmd
-    # Env var propagation into the nested container:
-    assert "CONTAINERIZER_APT_SOURCES" in joined
+    # File-based apt-sources transport (was env var, NUL-truncated):
+    assert "apt-sources.list" in joined

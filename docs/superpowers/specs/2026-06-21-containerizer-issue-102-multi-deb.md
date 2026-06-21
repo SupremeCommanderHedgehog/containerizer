@@ -39,7 +39,7 @@ containerizer build .\unifi_sysvinit_all.deb `
 
 ### In this change
 
-- `src/containerizer/trace/runner.py` — `TraceRunner` gains `extra_installers: tuple[Path, ...]`, `apt_sources: tuple[str, ...]`, `apt_keys: tuple[Path, ...]`. Install-mode argv mounts extras at `/installer-{i+1}.deb`, apt keys under `/work/apt-keys/`, and passes apt sources via a single NUL-packed env var `CONTAINERIZER_APT_SOURCES`.
+- `src/containerizer/trace/runner.py` — `TraceRunner` gains `extra_installers: tuple[Path, ...]`, `apt_sources: tuple[str, ...]`, `apt_keys: tuple[Path, ...]`. Install-mode argv mounts extras at `/installer-{i+1}.deb`, apt keys under `/work/apt-keys/`, and `TraceRunner.run()` writes apt sources to `output_dir/apt-sources.list` (one source per line). The output_dir is already bind-mounted at `/work/trace`, so the file is visible inside the runner at `/work/trace/apt-sources.list` without a new mount.
 - `sandbox/runner_image/trace-orchestrator.sh` — `run_deb_install` gains an apt-source-prep step that runs before `apt-get update`. It writes `/etc/apt/sources.list.d/containerizer.list`, copies key files into `/etc/apt/keyrings/`, then runs apt update + install over `/installer.deb /installer-*.deb`.
 - `src/containerizer/trace/cli.py` — `containerizer trace` gains `--installer`, `--apt-source`, `--apt-key` (all `multiple=True`). Mirrors the build CLI surface.
 - `src/containerizer/build/cli.py` — `containerizer build` gains the same three flags. `BuildConfig` (in `build/types.py` or equivalent) gains the three new fields.
@@ -155,11 +155,10 @@ Install-mode argv additions (conceptual diff):
  -e CONTAINERIZER_MODE=install
  -e CONTAINERIZER_INSTALLER=/installer
  -e CONTAINERIZER_INTERACTIVE=...
-+-e CONTAINERIZER_APT_SOURCES=<sources joined by \x00, empty if none>
  <runner-image-tag>
 ```
 
-NUL packing rationale: apt source lines legitimately contain spaces, brackets, equals, slashes, and newlines (continuation lines via backslash). NUL is the only ASCII byte that cannot appear in a `deb` line, so it is the safe in-band separator. Bash's `printf '%s\n'` with IFS unset by default will not split on NUL; we explicitly `IFS=$'\0'` in the orchestrator's decode step (§3.3).
+apt sources transport: `TraceRunner.run()` writes the apt source lines (one per line, newline-terminated) to `output_dir/apt-sources.list` before exec'ing podman. Since `output_dir` is already bind-mounted at `/work/trace` inside the runner, the file appears at `/work/trace/apt-sources.list` with no new mount needed. The orchestrator simply `cp -f`s it into `/etc/apt/sources.list.d/containerizer.list` when present. File transport sidesteps the POSIX env-var NUL-truncation trap (env vars are NUL-terminated C strings, so multi-source NUL-packed env vars get silently truncated at the first NUL byte).
 
 `/work/apt-keys/` is bind-mounted at the directory level (one mount per key, basename preserved) rather than copying keys at runner-image build time. Keeps the runner image stateless across users.
 
@@ -186,10 +185,9 @@ run_deb_install() {
                 cp -f "$key" "/etc/apt/keyrings/$(basename "$key")"
             done
         fi
-        # Decode the NUL-separated CONTAINERIZER_APT_SOURCES into the file.
-        if [ -n "${CONTAINERIZER_APT_SOURCES:-}" ]; then
-            (IFS=$'"'"'\0'"'"'; printf "%s\n" $CONTAINERIZER_APT_SOURCES) \
-                > /etc/apt/sources.list.d/containerizer.list
+        # Copy apt-sources from the file the host CLI wrote to output_dir.
+        if [ -e /work/trace/apt-sources.list ]; then
+            cp -f /work/trace/apt-sources.list /etc/apt/sources.list.d/containerizer.list
         fi
     ' > "$TRACE_DIR/apt-prep.log" 2>&1
 
@@ -347,7 +345,7 @@ End-to-end install flow with one primary + one extra + one apt source + one key:
 
 ## 7. Known risks
 
-1. **NUL-separator portability.** Bash's `IFS=$'\0'` is well-defined but the `printf` glob expansion behaviour around NUL bytes is platform-quirky. Mitigation: keep the NUL-decode logic inside the orchestrator (Linux bash 5.x guaranteed); host side just writes the env var. Test with multi-line `deb` lines (continuation via `\`) in the unit test.
+1. **File transport: no separator escaping needed.** Earlier drafts proposed a NUL-separated `CONTAINERIZER_APT_SOURCES` env var, but POSIX env-var values are NUL-terminated C strings — `execve(2)` truncates at the first NUL byte, so multi-source input silently lost everything after the first line. Switched to a file written by `TraceRunner.run()` to `output_dir/apt-sources.list` (mounted into the runner at `/work/trace/apt-sources.list`); the orchestrator just `cp -f`s it. One source per line, newline-terminated. No in-band separator, no escaping, no truncation surface.
 2. **Glob ordering vs determinism.** Already addressed in §3.2 + §3.3: extras mount as zero-padded `/installer-01.deb`..`/installer-99.deb`, glob is `/installer-??.deb`. CLI caps `--installer` at 99 occurrences and rejects past that with a clear error.
 3. **Keyring filename collisions across distinct users.** If two `--apt-key` paths resolve to the same basename (`key.gpg` + `subdir/key.gpg`), the second mount silently shadows the first. Mitigated by the documented CLI contract (basename is the visible name). If a future user trips on it we add a `-d` per-source-prefixed mountpath.
 4. **`[trusted=yes]` in tests creates a habit.** Integration tests use `[trusted=yes]` for repo-mock simplicity. The README renders apt-source lines with brackets stripped (see §3.4 last paragraph), so no `[trusted=yes]` ever lands in user-facing output. MANUAL.md scenarios 12 + 13 explicitly use `[signed-by=...]` only.

@@ -148,17 +148,10 @@ class TraceRunner:
             "CONTAINERIZER_INSTALLER=/installer",
             "-e",
             f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
-            # Issue #102: apt-source lines packed NUL-separated. Empty tuple ->
-            # omit the env var entirely so single-installer argv stays
-            # byte-identical to pre-#102.
-            *(
-                arg
-                for arg in (
-                    "-e",
-                    "CONTAINERIZER_APT_SOURCES=" + "\x00".join(self.apt_sources),
-                )
-                if self.apt_sources
-            ),
+            # Issue #102: apt-source lines are transported via a file written by
+            # run() to output_dir/apt-sources.list (mounted at
+            # /work/trace/apt-sources.list inside the runner). Env-var transport
+            # truncates at the first NUL byte; file transport doesn't.
             self.image_tag,
         ]
 
@@ -220,5 +213,16 @@ class TraceRunner:
 
     def run(self) -> int:
         """Exec the podman command in the foreground."""
+        self._materialize_apt_sources_file()
         result = subprocess.run(self.argv(), check=False)
         return result.returncode
+
+    def _materialize_apt_sources_file(self) -> None:
+        """Write apt_sources to output_dir / 'apt-sources.list' so the
+        orchestrator can read them inside the runner. Env-var transport
+        truncates at the first NUL byte; file transport doesn't."""
+        if not self.apt_sources:
+            return
+        target = self.output_dir / "apt-sources.list"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("\n".join(self.apt_sources) + "\n", encoding="utf-8")

@@ -345,8 +345,9 @@ def test_install_argv_mounts_apt_keys_by_basename(tmp_path: Path) -> None:
     assert f"{key.resolve()}:/work/apt-keys/mongo.gpg:ro" in argv
 
 
-def test_install_argv_packs_apt_sources_into_env(tmp_path: Path) -> None:
-    """Sources joined by NUL (\\x00) into one env var so newlines survive."""
+def test_run_writes_apt_sources_list_to_output_dir(tmp_path: Path, monkeypatch) -> None:
+    """Issue #102: apt_sources land in output_dir/apt-sources.list (file
+    transport; env-var NUL truncation avoided)."""
     installer = tmp_path / "primary.deb"
     installer.write_bytes(b"!<arch>\n")
     out = tmp_path / "out"
@@ -359,12 +360,19 @@ def test_install_argv_packs_apt_sources_into_env(tmp_path: Path) -> None:
         mode="install",
         apt_sources=("deb http://a noble main", "deb http://b noble main"),
     )
-    argv = runner.argv()
-    env_arg = next(a for a in argv if a.startswith("CONTAINERIZER_APT_SOURCES="))
-    assert env_arg == "CONTAINERIZER_APT_SOURCES=deb http://a noble main\x00deb http://b noble main"
+
+    # Don't actually exec podman; just trigger the materialize step.
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    runner.run()
+
+    sources_file = out / "apt-sources.list"
+    assert sources_file.exists()
+    text = sources_file.read_text(encoding="utf-8")
+    assert text == "deb http://a noble main\ndeb http://b noble main\n"
 
 
-def test_install_argv_omits_env_when_no_sources(tmp_path: Path) -> None:
+def test_run_does_not_write_apt_sources_when_empty(tmp_path: Path, monkeypatch) -> None:
+    """Single-installer flows produce no apt-sources.list."""
     installer = tmp_path / "primary.deb"
     installer.write_bytes(b"!<arch>\n")
     out = tmp_path / "out"
@@ -376,5 +384,8 @@ def test_install_argv_omits_env_when_no_sources(tmp_path: Path) -> None:
         output_dir=out,
         mode="install",
     )
-    argv = runner.argv()
-    assert not any(a.startswith("CONTAINERIZER_APT_SOURCES=") for a in argv)
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    runner.run()
+
+    assert not (out / "apt-sources.list").exists()

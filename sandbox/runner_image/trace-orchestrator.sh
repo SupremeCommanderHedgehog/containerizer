@@ -289,12 +289,19 @@ run_deb_install() {
     for f in /work/apt-keys/*; do
         extra_mounts+=(-v "$f:$f:ro")
     done
+    # Issue #102: apt-sources are transported via a file written by the host
+    # CLI to output_dir/apt-sources.list (visible here at
+    # /work/trace/apt-sources.list since output_dir is bind-mounted at
+    # /work/trace). Re-mount it into the nested container so apt-prep can read
+    # it. Env-var transport truncated multi-source input at the first NUL byte.
+    if [ -e /work/trace/apt-sources.list ]; then
+        extra_mounts+=(-v "/work/trace/apt-sources.list:/work/trace/apt-sources.list:ro")
+    fi
 
     run_rc=0
     podman run -d --rm --name deb-install \
         --privileged \
         --network=host \
-        -e "CONTAINERIZER_APT_SOURCES=${CONTAINERIZER_APT_SOURCES:-}" \
         -v "$INSTALLER:/installer.deb:ro" \
         "${extra_mounts[@]}" \
         docker.io/library/ubuntu:24.04 \
@@ -337,8 +344,8 @@ run_deb_install() {
     # (`install_rc=0; wait ... || install_rc=$?`).
     # Issue #102: apt-source + keyring prep. No-op when neither was passed
     # (the for-loop over /work/apt-keys/* hits a missing dir guard, and the
-    # CONTAINERIZER_APT_SOURCES check is false). Runs BEFORE apt-get update
-    # so the new sources are visible to the index refresh.
+    # apt-sources.list file check is false). Runs BEFORE apt-get update so
+    # the new sources are visible to the index refresh.
     podman exec deb-install bash -c '
         set -e
         install -d /etc/apt/keyrings /etc/apt/sources.list.d
@@ -348,9 +355,8 @@ run_deb_install() {
                 cp -f "$key" "/etc/apt/keyrings/$(basename "$key")"
             done
         fi
-        if [ -n "${CONTAINERIZER_APT_SOURCES:-}" ]; then
-            (IFS=$'"'"'\0'"'"'; printf "%s\n" $CONTAINERIZER_APT_SOURCES) \
-                > /etc/apt/sources.list.d/containerizer.list
+        if [ -e /work/trace/apt-sources.list ]; then
+            cp -f /work/trace/apt-sources.list /etc/apt/sources.list.d/containerizer.list
         fi
     ' > "$TRACE_DIR/apt-prep.log" 2>&1
 
