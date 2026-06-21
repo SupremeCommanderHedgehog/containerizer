@@ -235,6 +235,10 @@ def _default_install_trace_fn(
     installer: Path,
     start_cmd: str | None,  # reserved for future orchestrator env wiring
     output_dir: Path,
+    *,
+    extra_installers: tuple[Path, ...] = (),
+    apt_sources: tuple[str, ...] = (),
+    apt_keys: tuple[Path, ...] = (),
 ) -> int:
     image = RunnerImage(sandbox_dir=_sandbox_dir())
     if not image.exists():
@@ -246,6 +250,9 @@ def _default_install_trace_fn(
         installer=installer.resolve(),
         output_dir=output_dir.resolve(),
         tty=sys.stdin.isatty(),
+        extra_installers=extra_installers,
+        apt_sources=apt_sources,
+        apt_keys=apt_keys,
     )
     return runner.run()
 
