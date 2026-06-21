@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -139,11 +140,26 @@ def _consume_fallback(trace_dir: Path, collector: str) -> list[dict[str, object]
 
 def _parse_jsonl(path: Path) -> list[dict[str, object]]:
     out: list[dict[str, object]] = []
+    bad_lines = 0
     for line in path.read_text(encoding="utf-8").splitlines():
         # bpftrace dumps non-cleared map contents at script exit
         # (e.g., "@args[3429]: 140732759619824"); skip anything that
         # doesn't look like a JSON object.
         if not line.startswith("{"):
             continue
-        out.append(json.loads(line))
+        try:
+            out.append(json.loads(line))
+        except json.JSONDecodeError:
+            # bpftrace occasionally emits stray escape sequences in
+            # paths or comm fields (\x.., bare \ before non-escape
+            # chars) when the kernel surfaces non-ASCII bytes. Skip
+            # the line; the rest of the trace is still useful.
+            bad_lines += 1
+            continue
+    if bad_lines:
+        print(
+            f"[analyze] _parse_jsonl({path.name}): skipped {bad_lines} "
+            "malformed JSON line(s) (likely bpftrace stray escapes)",
+            file=sys.stderr,
+        )
     return out

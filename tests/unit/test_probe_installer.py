@@ -82,8 +82,21 @@ def test_probe_elf_round_trip(elf_path: Path) -> None:
     assert result.base_image.image.startswith("ubuntu:")
 
 
-def test_probe_unsupported_kind_raises(tmp_path: Path) -> None:
-    f = tmp_path / "wat.deb"
-    f.write_bytes(b"!<arch>\n")  # ar magic; pretends to be .deb
+def test_probe_deb_returns_DebProbe(tmp_path: Path) -> None:
+    from tests.fixtures.probe.deb_helpers import build_minimal_deb
+
+    deb = tmp_path / "x.deb"
+    build_minimal_deb(deb)
+    result = probe(deb)
+    assert result.kind is InstallerKind.deb
+    assert result.deb is not None
+    assert result.deb.package == "hello"
+    assert result.elf is None
+    assert result.base_image.image.startswith("ubuntu:")
+
+
+def test_probe_unsupported_kind_still_raises_for_rpm(tmp_path: Path) -> None:
+    f = tmp_path / "x.rpm"
+    f.write_bytes(b"\xed\xab\xee\xdb" + b"\x00" * 32)
     with pytest.raises(UnsupportedInstallerKind):
         probe(f)

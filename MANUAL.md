@@ -6,8 +6,8 @@ Step-by-step instructions for setting up the project and exercising every code p
 
 As of v0.2.1 the only user-facing command is `containerizer probe`. It statically inspects a Linux installer file and emits a typed JSON probe describing what it found. Concretely:
 
-- **ELF binaries** are fully probed — architecture, bit width, endianness, dynamic loader, NEEDED libraries, minimum glibc requirement, and a suggested Ubuntu LTS base image.
-- **`.deb`, `.rpm`, AppImage, shell scripts, tarballs** are *detected* (magic-byte sniff) but probing them raises a clear "not yet supported" error. The detection paths are what you can exercise here.
+- **ELF binaries and `.deb` packages** are fully probed — for ELF: architecture, bit width, endianness, dynamic loader, NEEDED libraries, minimum glibc requirement, and a suggested Ubuntu LTS base image; for `.deb`: control metadata plus the embedded ELF analysis.
+- **`.rpm`, AppImage, shell scripts, tarballs** are *detected* (magic-byte sniff) but probing them raises a clear "not yet supported" error. The detection paths are what you can exercise here.
 - **Everything else** is reported as `kind: "unknown"` and probing raises the same not-supported error.
 
 The trace/learn portion (running an installer in a sandbox and recording its behaviour) is not built yet — that's milestone M2.
@@ -122,12 +122,6 @@ The CLI rejects non-ELF kinds with a clear error, but you can confirm the *detec
 In PowerShell:
 
 ```pwsh
-# .deb (ar archive)
-[System.IO.File]::WriteAllBytes(
-  "C:\Temp\fake.deb",
-  [byte[]](0x21,0x3c,0x61,0x72,0x63,0x68,0x3e,0x0a) + (,0 * 32))
-containerizer probe C:\Temp\fake.deb
-
 # .rpm
 [System.IO.File]::WriteAllBytes(
   "C:\Temp\fake.rpm",
@@ -148,7 +142,7 @@ containerizer probe C:\Temp\fake.tar.gz
 Each call should exit non-zero and print a message like:
 
 ```
-Error: installer kind 'deb' is not yet supported: C:\Temp\fake.deb
+Error: installer kind 'rpm' is not yet supported: C:\Temp\fake.rpm
 ```
 
 That confirms `detect_kind` correctly identifies the magic bytes and the CLI surfaces the not-yet-supported case cleanly.

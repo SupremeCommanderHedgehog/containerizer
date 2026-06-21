@@ -1,4 +1,4 @@
-tests/fixtures/probe/* binary
+tests/fixtures/probe/elf-dynamic-x86_64 binary
 
 # Scripts executed inside Linux runner containers must stay LF on every
 # checkout, including Windows hosts where core.autocrlf=true would otherwise
