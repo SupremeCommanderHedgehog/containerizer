@@ -81,8 +81,13 @@ def _parse_control(text: str) -> dict[str, str]:
 def _extract_control(deb_path: Path) -> str:
     """Read the `control` file out of a .deb's control.tar.*.
 
-    Supports gzip, xz, zstd, and uncompressed control tarballs.
-    Returns the file's text content (UTF-8 with strict fallback).
+    Supports gzip and xz control tarballs (the two encodings Debian
+    itself ships today). zstd support depends on the runtime's
+    tarfile (3.14+) and is not guaranteed.
+
+    Decodes bytes as UTF-8 with `errors="replace"` so a corrupted
+    control file still produces parseable text rather than raising;
+    callers see U+FFFD for any invalid sequences.
     """
     with deb_path.open("rb") as fh:
         members = list(_iter_ar_members(fh))
@@ -91,19 +96,18 @@ def _extract_control(deb_path: Path) -> str:
             None,
         )
         if ctrl is None:
-            raise ValueError("no control.tar.* member in .deb")
+            raise ValueError(f"no control.tar.* member in .deb: {deb_path}")
         fh.seek(ctrl.offset)
         blob = fh.read(ctrl.size)
 
-    # tarfile auto-detects gzip/xz/bz2 from the magic when given
-    # a file-like. zstd requires Python 3.14+ tarfile or the
-    # `zstandard` extra; for v0.x we accept gzip + xz (the only
-    # two encodings Debian itself uses today).
+    # tarfile auto-detects gzip/xz/bz2 from the magic when given a file-like.
     with tarfile.open(fileobj=io.BytesIO(blob)) as tf:
         for member in tf:
             if member.name in ("control", "./control"):
                 fp = tf.extractfile(member)
                 if fp is None:
-                    raise ValueError("control entry is not a regular file")
+                    raise ValueError(
+                        f"control entry is not a regular file: {deb_path}"
+                    )
                 return fp.read().decode("utf-8", errors="replace")
-    raise ValueError("no `control` file in control.tar")
+    raise ValueError(f"no `control` file in control.tar of {deb_path}")
