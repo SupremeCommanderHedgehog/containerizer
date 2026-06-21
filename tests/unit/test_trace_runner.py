@@ -297,3 +297,84 @@ def test_verify_mode_rejects_apt_sources(tmp_path: Path) -> None:
             verify_seccomp_path=seccomp,
             apt_sources=("deb http://x noble main",),
         )
+
+
+def test_install_argv_mounts_extras_zero_padded(tmp_path: Path) -> None:
+    """Issue #102: extras land at /installer-NN.deb in user-supplied order."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    extra1 = tmp_path / "dep1.deb"
+    extra1.write_bytes(b"!<arch>\n")
+    extra2 = tmp_path / "dep2.deb"
+    extra2.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        extra_installers=(extra1, extra2),
+    )
+    argv = runner.argv()
+
+    assert f"{extra1.resolve()}:/installer-01.deb:ro" in argv
+    assert f"{extra2.resolve()}:/installer-02.deb:ro" in argv
+    # Primary stays where it was.
+    assert f"{installer.resolve()}:/installer:ro" in argv
+
+
+def test_install_argv_mounts_apt_keys_by_basename(tmp_path: Path) -> None:
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    key = tmp_path / "mongo.gpg"
+    key.write_bytes(b"\x00")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        apt_keys=(key,),
+    )
+    argv = runner.argv()
+
+    assert f"{key.resolve()}:/work/apt-keys/mongo.gpg:ro" in argv
+
+
+def test_install_argv_packs_apt_sources_into_env(tmp_path: Path) -> None:
+    """Sources joined by NUL (\\x00) into one env var so newlines survive."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        apt_sources=("deb http://a noble main", "deb http://b noble main"),
+    )
+    argv = runner.argv()
+    env_arg = next(a for a in argv if a.startswith("CONTAINERIZER_APT_SOURCES="))
+    assert env_arg == "CONTAINERIZER_APT_SOURCES=deb http://a noble main\x00deb http://b noble main"
+
+
+def test_install_argv_omits_env_when_no_sources(tmp_path: Path) -> None:
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+    )
+    argv = runner.argv()
+    assert not any(a.startswith("CONTAINERIZER_APT_SOURCES=") for a in argv)

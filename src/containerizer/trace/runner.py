@@ -127,6 +127,19 @@ class TraceRunner:
             "/usr/src:/usr/src:ro",
             "-v",
             f"{self.installer.resolve()}:/installer:ro",
+            # Issue #102: extras at /installer-NN.deb (zero-padded for stable
+            # glob expansion: /installer-??.deb).
+            *(
+                arg
+                for i, extra in enumerate(self.extra_installers, start=1)
+                for arg in ("-v", f"{extra.resolve()}:/installer-{i:02d}.deb:ro")
+            ),
+            # Issue #102: apt-keys mounted at /work/apt-keys/<basename>.
+            *(
+                arg
+                for key in self.apt_keys
+                for arg in ("-v", f"{key.resolve()}:/work/apt-keys/{key.name}:ro")
+            ),
             "-v",
             f"{self.output_dir.resolve()}:/work/trace",
             "-e",
@@ -135,6 +148,17 @@ class TraceRunner:
             "CONTAINERIZER_INSTALLER=/installer",
             "-e",
             f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
+            # Issue #102: apt-source lines packed NUL-separated. Empty tuple ->
+            # omit the env var entirely so single-installer argv stays
+            # byte-identical to pre-#102.
+            *(
+                arg
+                for arg in (
+                    "-e",
+                    "CONTAINERIZER_APT_SOURCES=" + "\x00".join(self.apt_sources),
+                )
+                if self.apt_sources
+            ),
             self.image_tag,
         ]
 
