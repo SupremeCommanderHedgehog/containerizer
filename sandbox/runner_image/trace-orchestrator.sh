@@ -104,6 +104,25 @@ finalize_marker() {
     : > "$TRACE_DIR/$marker"
 }
 
+_detect_kind() {
+    # Echo one of: elf, deb, unknown. Reads the first 8 bytes.
+    # Note: $(...) strips trailing newlines, which can clip the 8th byte of
+    # the deb magic (!<arch>\n). Matching just the "!<arch>" prefix is
+    # sufficient -- no ELF or other relevant kind starts with "!".
+    local path="$1"
+    local head
+    head=$(dd if="$path" bs=8 count=1 2>/dev/null)
+    if [[ "$head" == $'\x7fELF'* ]]; then
+        echo "elf"
+        return
+    fi
+    if [[ "$head" == "!<arch>"* ]]; then
+        echo "deb"
+        return
+    fi
+    echo "unknown"
+}
+
 trap 'finalize_marker PARTIAL; exit 0' INT TERM
 
 # After the 2s attach grace, check whether each collector is still alive.
@@ -143,8 +162,9 @@ done
     printf "}\n"
 } > "$TRACE_DIR/FALLBACKS.json"
 
-if [[ "$MODE" == "install" ]]; then
-    # ---- existing M2 install-mode workload ----
+run_elf_install() {
+    # ---- existing M2 install-mode workload, extracted into a function
+    # so Phase 3 can dispatch between ELF and .deb installer kinds.
     echo "trace-orchestrator: running installer $INSTALLER" >&2
 
     # Decide interactive vs non-interactive. Under systemd-PID-1 (#90) the
@@ -226,6 +246,133 @@ if [[ "$MODE" == "install" ]]; then
     fi
     finalize_marker COMPLETE
     echo "trace-orchestrator: COMPLETE" >&2
+}
+
+run_deb_install() {
+    # .deb install workload (#99). Runs apt-get install inside a nested
+    # ubuntu:24.04 container under --systemd=always so postinst's
+    # `systemctl start <unit>` actually works. Collectors observe events
+    # on the outer Fedora kernel and see the nested container's syscalls
+    # natively. Install-phase activity (pull, apt-get update, dpkg) lands
+    # before PHASE_MARKER and the analyzer excludes it from runtime policy.
+
+    # First-run pull of ubuntu:24.04. Cached on subsequent runs.
+    podman pull docker.io/library/ubuntu:24.04 > "$TRACE_DIR/deb-pull.log" 2>&1
+
+    # Nested install container: plain sleep-forever ubuntu:24.04.
+    # We don't boot systemd here (would need Delegate=yes on the outer
+    # containerizer-trace.service plus a working cgroup-v2 delegation
+    # chain). Ubuntu's /usr/sbin/policy-rc.d returns 101 in non-systemd
+    # containers so postinst's `systemctl start` no-ops cleanly without
+    # crashing the install. Trade-off: daemon-shaped packages install
+    # but the daemon is NOT running inside the nested container -- the
+    # user can't smoke-test a live daemon via `podman exec deb-install
+    # <cmd>`. Trace integration (test fixture, CI) doesn't care because
+    # PHASE_MARKER finalises immediately on non-interactive runs.
+    # NB: nested-mount path ends in .deb. apt-get install determines
+    # local-file-vs-package-name purely by extension: with just
+    # `/installer` apt treats it as a package name and fails with
+    # `E: Unsupported file /installer given on commandline`. The
+    # OUTER /installer mount (from the host wrapper) is unchanged.
+    run_rc=0
+    podman run -d --rm --name deb-install \
+        --privileged \
+        --network=host \
+        -v "$INSTALLER:/installer.deb:ro" \
+        docker.io/library/ubuntu:24.04 \
+        sleep infinity \
+        > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err" || run_rc=$?
+
+    # Capture state for post-mortem if anything below fails. Always written.
+    {
+        echo "=== run exit code: $run_rc ==="
+        echo "=== podman version ==="
+        podman version 2>&1 || true
+        echo "=== podman info (driver) ==="
+        podman info --format '{{.Store.GraphDriverName}} {{.Host.CgroupVersion}} {{.Host.CgroupManager}}' 2>&1 || true
+        echo "=== ps -a ==="
+        podman ps -a 2>&1 || true
+        echo "=== inspect deb-install ==="
+        podman inspect deb-install 2>&1 | head -200 || true
+        echo "=== logs deb-install ==="
+        podman logs deb-install 2>&1 | head -50 || true
+        echo "=== deb-install.cid contents ==="
+        cat "$TRACE_DIR/deb-install.cid" 2>&1 || true
+        echo "=== deb-install.err contents ==="
+        cat "$TRACE_DIR/deb-install.err" 2>&1 || true
+    } > "$TRACE_DIR/deb-debug.log" 2>&1
+    echo "trace-orchestrator: nested container run rc=$run_rc; debug at $TRACE_DIR/deb-debug.log" >&2
+
+    # Extend the INT/TERM trap so Ctrl-C during install does not leak the
+    # nested container. The outer trap (set at line ~107 of this script)
+    # already fires finalize_marker PARTIAL; we add `podman stop` in front.
+    trap 'podman stop -t 2 deb-install >/dev/null 2>&1 || true; finalize_marker PARTIAL; exit 0' INT TERM
+
+    # Sync apt + install /installer.deb inside the nested container. apt-get
+    # runs synchronously (foreground); `apt-get -y` needs no stdin so the
+    # #95 `<&0` redirect required for backgrounded interactive installers
+    # does not apply.
+    #
+    # Note: under `set -e`, a non-zero exit from podman exec would abort
+    # the script BEFORE we capture $?. Use `|| install_rc=$?` to
+    # short-circuit set -e, matching the pattern in run_elf_install
+    # (`install_rc=0; wait ... || install_rc=$?`).
+    install_rc=0
+    podman exec deb-install bash -c '
+        export DEBIAN_FRONTEND=noninteractive
+        apt-get update &&
+        apt-get install -y /installer.deb
+    ' > "$TRACE_DIR/install.log" 2>&1 || install_rc=$?
+    echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
+
+    if (( install_rc != 0 )); then
+        echo "failed" > "$TRACE_DIR/install.status"
+        podman stop -t 5 deb-install >/dev/null 2>&1 || true
+        echo "trace-orchestrator: deb install failed (rc=$install_rc); finalising PARTIAL" >&2
+        finalize_marker PARTIAL
+        exit 0
+    fi
+
+    awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
+        > "$TRACE_DIR/PHASE_MARKER"
+
+    if [[ -n "${CONTAINERIZER_INTERACTIVE:-}" ]]; then
+        interactive="${CONTAINERIZER_INTERACTIVE}"
+    elif [[ -t 1 ]]; then
+        interactive=1
+    else
+        interactive=0
+    fi
+
+    if [[ "$interactive" == 1 ]]; then
+        echo "trace-orchestrator: deb installed. exercise the software (podman exec deb-install <cmd>), then press <Enter> here to finalise." >&2
+        read -r _ || true
+    else
+        echo "trace-orchestrator: deb installed (non-interactive); finalising" >&2
+    fi
+
+    podman stop -t 10 deb-install >/dev/null 2>&1 || true
+    finalize_marker COMPLETE
+    echo "trace-orchestrator: COMPLETE" >&2
+}
+
+if [[ "$MODE" == "install" ]]; then
+    INSTALLER_KIND="$(_detect_kind "$INSTALLER")"
+    echo "trace-orchestrator: installer kind=$INSTALLER_KIND" >&2
+    case "$INSTALLER_KIND" in
+        deb)
+            run_deb_install
+            ;;
+        elf|*)
+            # ELF / shell scripts / .run files / anything else: hand off to
+            # run_elf_install, which just exec's the installer. _detect_kind
+            # only positively identifies ELF and DEB, but the orchestrator's
+            # pre-#99 contract was to run whatever was mounted at /installer
+            # regardless of kind. Preserve that fallback so shell-script
+            # installers (e.g. fixtures, .run wrappers) keep working.
+            run_elf_install
+            ;;
+    esac
 else
     # ---- M6 verify-mode workload ----
     echo "trace-orchestrator: dispatching to verify-orchestrator (mode=verify)" >&2
