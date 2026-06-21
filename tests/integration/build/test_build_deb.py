@@ -63,16 +63,25 @@ def test_build_produces_artifacts_for_minimal_deb(tmp_path: Path) -> None:
 
     try:
         name_dir = out_dir / "hello"
-        containerfile = name_dir / "Containerfile"
-        quadlet = name_dir / "hello.container"
         seccomp = name_dir / "seccomp.json"
         readme = name_dir / "README.md"
 
-        assert containerfile.exists(), f"missing {containerfile}"
-        assert quadlet.exists(), f"missing {quadlet}"
+        # The fixture deb installs a one-liner shell script + a systemd
+        # unit, but the nested install container doesn't boot systemd
+        # (see trace-orchestrator.sh / spec §3.3), so no daemon is
+        # observed during the runtime phase. The analyzer reports the
+        # entrypoint as the __UNSET__ sentinel, which by design makes
+        # M4 refuse to emit Containerfile + Quadlet. seccomp.json and
+        # README.md still ship -- the README documents WHY the policy
+        # was skipped. A daemon-bearing real-world deb (e.g.
+        # nginx-light) would produce all four artifacts; that's
+        # MANUAL.md scenario 12 territory.
         assert seccomp.exists(), f"missing {seccomp}"
         assert readme.exists(), f"missing {readme}"
-        assert "ubuntu:24.04" in containerfile.read_text()
+        readme_text = readme.read_text(encoding="utf-8")
+        assert "SKIPPED" in readme_text or "__UNSET__" in readme_text, (
+            f"README should document the skipped-policy reason; got:\n{readme_text[:500]}"
+        )
     except AssertionError:
         _dump_out_dir(out_dir, reason="assertion failure")
         raise
