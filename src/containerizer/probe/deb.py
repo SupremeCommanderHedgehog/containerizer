@@ -145,19 +145,30 @@ def _discover_systemd_units(deb_path: Path) -> list[str]:
     return sorted(units)
 
 
+_REQUIRED_CONTROL_FIELDS = ("Package", "Version", "Architecture")
+
+
 def probe_deb(path: Path) -> DebProbe:
     """Parse a Debian .deb and return a typed DebProbe."""
     text = _extract_control(path)
     fields = _parse_control(text)
 
+    missing = [k for k in _REQUIRED_CONTROL_FIELDS if k not in fields]
+    if missing:
+        raise ValueError(
+            f"control file missing required fields {missing}: {path}"
+        )
+
     def _split(value: str) -> list[str]:
         return [s.strip() for s in value.split(",") if s.strip()] if value else []
 
-    description = fields.get("Description")
+    # Truncate Description to its summary line. Treat an empty
+    # Description: field the same as a missing one so the empty
+    # string doesn't sneak through `splitlines()[0]` (which would
+    # IndexError on []).
+    description: str | None = fields.get("Description") or None
     if description is not None:
-        # Keep only the first paragraph; multi-line description's
-        # first newline already separates summary from extended text.
-        description = description.splitlines()[0] if description else None
+        description = description.splitlines()[0]
 
     return DebProbe(
         package=fields["Package"],

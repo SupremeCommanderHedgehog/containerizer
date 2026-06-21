@@ -109,8 +109,12 @@ def test_probe_deb_returns_populated_DebProbe(hello_deb: Path) -> None:
     assert probe.version == "2.10-3"
     assert probe.arch == "amd64"
     assert probe.depends == ["libc6 (>= 2.34)"]
+    assert probe.pre_depends == []
+    assert probe.recommends == []
     assert probe.maintainer == "Test <test@example.com>"
-    assert probe.description is not None and probe.description.startswith("test package")
+    # Description in fixture is "test package\n A test package for ..."
+    # so the summary line is exactly "test package".
+    assert probe.description == "test package"
     assert probe.systemd_units == ["hello.service"]
 
 
@@ -120,3 +124,26 @@ def test_probe_deb_handles_missing_optional_fields(tmp_path: Path) -> None:
     probe = probe_deb(spartan)
     assert probe.depends == []
     assert probe.systemd_units == []
+
+
+def test_probe_deb_raises_on_missing_required_control_field(tmp_path: Path) -> None:
+    """A control file without Package/Version/Architecture should produce
+    a clear ValueError before pydantic, not a raw KeyError."""
+    import io
+
+    from tests.fixtures.probe.deb_helpers import _ar_append, _make_tar_gz
+
+    deb = tmp_path / "broken.deb"
+    control_tar = _make_tar_gz(
+        {"control": b"Version: 1\nArchitecture: amd64\n\n"}
+    )
+    data_tar = _make_tar_gz({"./usr/bin/x": b"#!/bin/sh\n"})
+    buf = io.BytesIO()
+    buf.write(b"!<arch>\n")
+    _ar_append(buf, "debian-binary", b"2.0\n")
+    _ar_append(buf, "control.tar.gz", control_tar)
+    _ar_append(buf, "data.tar.gz", data_tar)
+    deb.write_bytes(buf.getvalue())
+
+    with pytest.raises(ValueError, match="Package"):
+        probe_deb(deb)
