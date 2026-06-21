@@ -78,3 +78,25 @@ def test_discover_systemd_units_empty_when_no_units(tmp_path: Path) -> None:
     bare = tmp_path / "bare.deb"
     build_minimal_deb(bare, systemd_unit=None)
     assert _discover_systemd_units(bare) == []
+
+
+def test_discover_systemd_units_finds_units_in_usr_lib_and_dedups(
+    tmp_path: Path,
+) -> None:
+    """Cover both the usr/lib/systemd/system/ branch and the
+    deduplication branch in _discover_systemd_units."""
+    deb = tmp_path / "multi_1_amd64.deb"
+    build_minimal_deb(
+        deb,
+        package="multi",
+        version="1",
+        systemd_unit="alpha.service",  # under ./lib/systemd/system/
+        extra_unit_paths=[
+            "./usr/lib/systemd/system/beta.service",
+            # duplicate basename of the default lib/.../alpha.service,
+            # but at a different parent path — exercises basename dedup.
+            "./usr/lib/systemd/system/alpha.service",
+        ],
+    )
+    units = _discover_systemd_units(deb)
+    assert units == ["alpha.service", "beta.service"]

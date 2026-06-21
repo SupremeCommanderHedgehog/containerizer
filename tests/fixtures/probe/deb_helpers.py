@@ -61,6 +61,7 @@ def build_minimal_deb(
     maintainer: str = "Test <test@example.com>",
     description: str = "test package\n A test package for containerizer.",
     systemd_unit: str | None = "hello.service",
+    extra_unit_paths: list[str] | None = None,
 ) -> None:
     """Write a minimal but valid .deb to *path*."""
     control_fields = [
@@ -84,6 +85,14 @@ def build_minimal_deb(
             "[Install]\nWantedBy=multi-user.target\n"
         )
         data_entries[f"./lib/systemd/system/{systemd_unit}"] = unit_body.encode()
+    if extra_unit_paths:
+        extra_body = (
+            "[Unit]\nDescription=Extra service\n"
+            "[Service]\nExecStart=/usr/bin/true\n"
+            "[Install]\nWantedBy=multi-user.target\n"
+        )
+        for ep in extra_unit_paths:
+            data_entries[ep] = extra_body.encode()
     data_tar = _make_tar_gz(data_entries)
 
     buf = io.BytesIO()

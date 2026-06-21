@@ -133,7 +133,7 @@ def _discover_systemd_units(deb_path: Path) -> list[str]:
         for member in tf:
             if not member.isfile():
                 continue
-            name = member.name.lstrip("./")
+            name = member.name.removeprefix("./")
             if name.startswith("lib/systemd/system/") or name.startswith(
                 "usr/lib/systemd/system/"
             ):
