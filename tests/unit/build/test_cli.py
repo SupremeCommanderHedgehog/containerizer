@@ -256,3 +256,51 @@ def test_pipeline_error_exits_1(tmp_path: Path) -> None:
         )
     assert result.exit_code == 1
     assert "did not finalise" in result.stderr
+
+
+def test_build_cli_plumbs_multi_deb_flags(tmp_path: Path, monkeypatch) -> None:
+    """Issue #102: --installer / --apt-source / --apt-key reach BuildConfig."""
+    from click.testing import CliRunner
+
+    from containerizer.build import cli as build_cli
+    from containerizer.build.config import BuildResult
+
+    primary = tmp_path / "primary.deb"
+    primary.write_bytes(b"!<arch>\n")
+    extra = tmp_path / "extra.deb"
+    extra.write_bytes(b"!<arch>\n")
+    key = tmp_path / "mongo.gpg"
+    key.write_bytes(b"\x00")
+    out = tmp_path / "out"
+
+    captured: dict[str, object] = {}
+
+    def fake_run_pipeline(config, **kw):
+        captured["config"] = config
+        return BuildResult(final_dir=out / "x", intermediates_dir=None)
+
+    monkeypatch.setattr(build_cli, "preflight_podman", lambda: None)
+    monkeypatch.setattr(build_cli, "run_pipeline", fake_run_pipeline)
+    monkeypatch.setattr(build_cli, "_print_summary", lambda r: None)
+
+    result = CliRunner().invoke(
+        build_cli.build_cmd,
+        [
+            str(primary),
+            "--name",
+            "x",
+            "-o",
+            str(out),
+            "--installer",
+            str(extra),
+            "--apt-source",
+            "deb http://y noble main",
+            "--apt-key",
+            str(key),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    cfg = captured["config"]
+    assert cfg.extra_installers == (extra.resolve(),)
+    assert cfg.apt_sources == ("deb http://y noble main",)
+    assert cfg.apt_keys == (key.resolve(),)
