@@ -43,6 +43,29 @@ def test_build_config_rejects_unknown_field() -> None:
         )
 
 
+def test_build_config_defaults_multi_deb_fields_to_empty() -> None:
+    """Issue #102: empty-tuple defaults keep single-installer flows unchanged."""
+    cfg = BuildConfig(installer=Path("/tmp/x"), name="demo", out_dir=Path("out"))
+    assert cfg.extra_installers == ()
+    assert cfg.apt_sources == ()
+    assert cfg.apt_keys == ()
+
+
+def test_build_config_accepts_multi_deb_fields() -> None:
+    """Issue #102: extras / apt-sources / apt-keys round-trip cleanly."""
+    cfg = BuildConfig(
+        installer=Path("/tmp/x"),
+        name="demo",
+        out_dir=Path("out"),
+        extra_installers=(Path("/tmp/dep.deb"),),
+        apt_sources=("deb http://x noble main",),
+        apt_keys=(Path("/tmp/mongo.gpg"),),
+    )
+    assert cfg.extra_installers == (Path("/tmp/dep.deb"),)
+    assert cfg.apt_sources == ("deb http://x noble main",)
+    assert cfg.apt_keys == (Path("/tmp/mongo.gpg"),)
+
+
 def test_build_result_round_trip_with_verify() -> None:
     report = VerifyReport(
         original_marker="COMPLETE",

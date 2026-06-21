@@ -88,7 +88,12 @@ def _append_jsonl(path: Path, event: dict[str, object]) -> None:
         f.write(json.dumps(event) + "\n")
 
 
-def _fake_install_trace(installer: Path, start_cmd: str | None, output_dir: Path) -> int:
+def _fake_install_trace(
+    installer: Path,
+    start_cmd: str | None,
+    output_dir: Path,
+    **_kwargs: object,  # Issue #102: pipeline now passes extra_installers etc.
+) -> int:
     _copy_synth_into(output_dir)
     # Inject a runtime-phase systemd execve so derive_policy yields a
     # non-sentinel entrypoint and the pipeline runs to verify.
@@ -135,8 +140,13 @@ def _real_derive_policy(trace: TraceJson) -> PolicyJson:
     return derive_policy(trace, warnings=list(trace.warnings))
 
 
-def _real_generate(policy: PolicyJson, name: str, final_dir: Path) -> None:
-    generate_all(policy, name, final_dir)
+def _real_generate(
+    policy: PolicyJson,
+    name: str,
+    final_dir: Path,
+    **kwargs: object,  # Issue #102: pipeline now passes install_primary etc.
+) -> None:
+    generate_all(policy, name, final_dir, **kwargs)
 
 
 def _cfg(tmp_path: Path, **overrides: object) -> BuildConfig:
