@@ -348,15 +348,15 @@ run_deb_install() {
     # the new sources are visible to the index refresh.
     podman exec deb-install bash -c '
         set -e
-        install -d /etc/apt/keyrings /etc/apt/sources.list.d
+        install -dv /etc/apt/keyrings /etc/apt/sources.list.d
         if [ -d /work/apt-keys ]; then
             for key in /work/apt-keys/*; do
                 [ -e "$key" ] || continue
-                cp -f "$key" "/etc/apt/keyrings/$(basename "$key")"
+                cp -fv "$key" "/etc/apt/keyrings/$(basename "$key")"
             done
         fi
         if [ -e /work/trace/apt-sources.list ]; then
-            cp -f /work/trace/apt-sources.list /etc/apt/sources.list.d/containerizer.list
+            cp -fv /work/trace/apt-sources.list /etc/apt/sources.list.d/containerizer.list
         fi
     ' > "$TRACE_DIR/apt-prep.log" 2>&1
 

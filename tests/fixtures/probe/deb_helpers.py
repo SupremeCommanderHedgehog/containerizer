@@ -75,8 +75,13 @@ def build_minimal_deb(
     ]
     control_tar = _make_tar_gz({"control": "\n".join(control_fields).encode()})
 
+    # Issue #102: payload path includes the package name so two fixture debs
+    # installed in the same apt transaction don't collide on a shared
+    # `/usr/bin/hello` (dpkg refuses to overwrite a file from a different
+    # package). Single-deb tests are unaffected because the existing tests
+    # assert against the systemd unit name, not the bin path.
     data_entries: dict[str, bytes] = {
-        "./usr/bin/hello": b"#!/bin/sh\necho hello\n",
+        f"./usr/bin/{package}": b"#!/bin/sh\necho hello\n",
     }
     if systemd_unit is not None:
         unit_body = (
