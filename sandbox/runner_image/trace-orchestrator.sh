@@ -265,6 +265,7 @@ run_deb_install() {
     # postinst can adjust sysctl/nftables if asked.
     podman run -d --rm --name deb-install \
         --systemd=always --privileged \
+        --cgroupns=private \
         --network=host \
         -v "$INSTALLER:/installer:ro" \
         docker.io/library/ubuntu:24.04 \
@@ -327,16 +328,17 @@ if [[ "$MODE" == "install" ]]; then
     INSTALLER_KIND="$(_detect_kind "$INSTALLER")"
     echo "trace-orchestrator: installer kind=$INSTALLER_KIND" >&2
     case "$INSTALLER_KIND" in
-        elf)
-            run_elf_install
-            ;;
         deb)
             run_deb_install
             ;;
-        *)
-            echo "trace-orchestrator: unsupported installer kind: $INSTALLER_KIND" >&2
-            finalize_marker PARTIAL
-            exit 0
+        elf|*)
+            # ELF / shell scripts / .run files / anything else: hand off to
+            # run_elf_install, which just exec's the installer. _detect_kind
+            # only positively identifies ELF and DEB, but the orchestrator's
+            # pre-#99 contract was to run whatever was mounted at /installer
+            # regardless of kind. Preserve that fallback so shell-script
+            # installers (e.g. fixtures, .run wrappers) keep working.
+            run_elf_install
             ;;
     esac
 else

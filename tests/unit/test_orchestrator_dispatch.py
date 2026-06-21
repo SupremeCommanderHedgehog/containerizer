@@ -102,5 +102,6 @@ run_deb_install
     assert "pull docker.io/library/ubuntu:24.04" in joined
     assert "run -d --rm --name deb-install" in joined
     assert "--systemd=always" in joined
+    assert "--cgroupns=private" in joined
     assert "exec deb-install" in joined
     assert "stop -t 10 deb-install" in joined
