@@ -89,7 +89,14 @@ def test_trace_propagates_stdin_isatty_to_runner(tmp_path: Path) -> None:
             stack.enter_context(
                 patch.object(trace_cli_module.sys.stdin, "isatty", return_value=isatty_value)
             )
-            trace_cmd.callback(installer=installer, output_dir=output, force=False)
+            trace_cmd.callback(
+                installer=installer,
+                output_dir=output,
+                force=False,
+                extra_installers=(),
+                apt_sources=(),
+                apt_keys=(),
+            )
 
     # Terminal case: tty=True must reach the runner.
     _invoke(True)
@@ -359,3 +366,142 @@ def test_podman_machine_is_running_returns_false_on_linux_when_podman_missing(
     from containerizer.trace.cli import _podman_machine_is_running
 
     assert _podman_machine_is_running() is False
+
+
+def test_trace_cli_accepts_installer_apt_source_apt_key(tmp_path: Path, monkeypatch) -> None:
+    """Issue #102: parse + plumb the three new flags."""
+    from click.testing import CliRunner
+
+    from containerizer.trace import cli as trace_cli
+
+    monkeypatch.setattr(trace_cli, "_podman_machine_is_running", lambda: True)
+
+    primary = tmp_path / "primary.deb"
+    primary.write_bytes(b"!<arch>\n")
+    extra = tmp_path / "extra.deb"
+    extra.write_bytes(b"!<arch>\n")
+    key = tmp_path / "mongo.gpg"
+    key.write_bytes(b"\x00")
+    out = tmp_path / "out"
+
+    captured: dict[str, object] = {}
+
+    class FakeImage:
+        tag = "fake-tag"
+
+        def __init__(self, sandbox_dir):
+            pass
+
+        def exists(self):
+            return True
+
+    class FakeRunner:
+        def __init__(self, **kw):
+            captured.update(kw)
+            self.output_dir = kw["output_dir"]
+
+        def validate_output_dir(self, *, force):
+            pass
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(trace_cli, "RunnerImage", FakeImage)
+    monkeypatch.setattr(trace_cli, "TraceRunner", FakeRunner)
+    monkeypatch.setattr(trace_cli, "_print_summary", lambda *a, **kw: None)
+
+    result = CliRunner().invoke(
+        trace_cli.trace_cmd,
+        [
+            str(primary),
+            "-o",
+            str(out),
+            "--installer",
+            str(extra),
+            "--apt-source",
+            "deb http://x noble main",
+            "--apt-key",
+            str(key),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert captured["extra_installers"] == (extra.resolve(),)
+    assert captured["apt_sources"] == ("deb http://x noble main",)
+    assert captured["apt_keys"] == (key.resolve(),)
+
+
+def test_trace_cli_rejects_apt_source_not_starting_with_deb(tmp_path: Path, monkeypatch) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.trace import cli as trace_cli
+
+    monkeypatch.setattr(trace_cli, "_podman_machine_is_running", lambda: True)
+
+    primary = tmp_path / "primary.deb"
+    primary.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+
+    result = CliRunner().invoke(
+        trace_cli.trace_cmd,
+        [
+            str(primary),
+            "-o",
+            str(out),
+            "--apt-source",
+            "apt-get install nginx",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must start with 'deb '" in result.output
+
+
+def test_trace_cli_rejects_apt_key_with_wrong_extension(tmp_path: Path, monkeypatch) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.trace import cli as trace_cli
+
+    monkeypatch.setattr(trace_cli, "_podman_machine_is_running", lambda: True)
+
+    primary = tmp_path / "primary.deb"
+    primary.write_bytes(b"!<arch>\n")
+    weird = tmp_path / "key.txt"
+    weird.write_text("not a keyring")
+    out = tmp_path / "out"
+
+    result = CliRunner().invoke(
+        trace_cli.trace_cmd,
+        [
+            str(primary),
+            "-o",
+            str(out),
+            "--apt-key",
+            str(weird),
+        ],
+    )
+    assert result.exit_code != 0
+    assert "must end in .gpg or .asc" in result.output
+
+
+def test_trace_cli_caps_extra_installers_at_99(tmp_path: Path, monkeypatch) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.trace import cli as trace_cli
+
+    monkeypatch.setattr(trace_cli, "_podman_machine_is_running", lambda: True)
+
+    primary = tmp_path / "primary.deb"
+    primary.write_bytes(b"!<arch>\n")
+    extras = []
+    for i in range(100):
+        p = tmp_path / f"e{i}.deb"
+        p.write_bytes(b"!<arch>\n")
+        extras.append(p)
+    out = tmp_path / "out"
+
+    args = [str(primary), "-o", str(out)]
+    for e in extras:
+        args.extend(["--installer", str(e)])
+
+    result = CliRunner().invoke(trace_cli.trace_cmd, args)
+    assert result.exit_code != 0
+    assert "cap is 99" in result.output
