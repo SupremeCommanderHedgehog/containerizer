@@ -269,11 +269,16 @@ run_deb_install() {
     # user can't smoke-test a live daemon via `podman exec deb-install
     # <cmd>`. Trace integration (test fixture, CI) doesn't care because
     # PHASE_MARKER finalises immediately on non-interactive runs.
+    # NB: nested-mount path ends in .deb. apt-get install determines
+    # local-file-vs-package-name purely by extension: with just
+    # `/installer` apt treats it as a package name and fails with
+    # `E: Unsupported file /installer given on commandline`. The
+    # OUTER /installer mount (from the host wrapper) is unchanged.
     run_rc=0
     podman run -d --rm --name deb-install \
         --privileged \
         --network=host \
-        -v "$INSTALLER:/installer:ro" \
+        -v "$INSTALLER:/installer.deb:ro" \
         docker.io/library/ubuntu:24.04 \
         sleep infinity \
         > "$TRACE_DIR/deb-install.cid" 2> "$TRACE_DIR/deb-install.err" || run_rc=$?
@@ -303,7 +308,7 @@ run_deb_install() {
     # already fires finalize_marker PARTIAL; we add `podman stop` in front.
     trap 'podman stop -t 2 deb-install >/dev/null 2>&1 || true; finalize_marker PARTIAL; exit 0' INT TERM
 
-    # Sync apt + install /installer inside the nested container. apt-get
+    # Sync apt + install /installer.deb inside the nested container. apt-get
     # runs synchronously (foreground); `apt-get -y` needs no stdin so the
     # #95 `<&0` redirect required for backgrounded interactive installers
     # does not apply.
@@ -316,7 +321,7 @@ run_deb_install() {
     podman exec deb-install bash -c '
         export DEBIAN_FRONTEND=noninteractive
         apt-get update &&
-        apt-get install -y /installer
+        apt-get install -y /installer.deb
     ' > "$TRACE_DIR/install.log" 2>&1 || install_rc=$?
     echo "$install_rc" > "$TRACE_DIR/installer.exitcode"
 
