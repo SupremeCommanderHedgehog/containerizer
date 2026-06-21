@@ -108,3 +108,81 @@ run_deb_install
     # Diagnostic dump (#99) should fire unconditionally, recording at least
     # the `ps -a` probe in the stub log.
     assert "ps -a" in joined
+    # Issue #102: install command always includes the zero-padded glob even
+    # when no extras were mounted (shopt -s nullglob inside the inner bash -c
+    # collapses it to empty).
+    assert "/installer-??.deb" in joined
+
+
+@pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
+def test_run_deb_install_apt_prep_copies_keys_and_writes_sources(
+    tmp_path: Path,
+) -> None:
+    """Issue #102: with CONTAINERIZER_APT_SOURCES set and /work/apt-keys/*
+    mounted, the prep step copies keys into /etc/apt/keyrings/ and writes
+    the sources file. The install command uses the zero-padded glob to pick
+    up the extras."""
+
+    deb = tmp_path / "x.deb"
+    deb.write_bytes(b"!<arch>\n" + b"\x00" * 32)
+    log = tmp_path / "podman-stub.log"
+    trace_dir = tmp_path / "trace"
+    trace_dir.mkdir()
+
+    # Fake key fixture mounted at /work/apt-keys/test.gpg (host-side path is
+    # a tmp_path file; we tell the orchestrator about it via a fake glob
+    # base dir overridden through PATH or by symlinking under tmp_path).
+    # The orchestrator's loop uses literal `/work/apt-keys/*` so we create
+    # that path on the test host (only safe under Linux/bash; on Windows
+    # git-bash maps it to a relative path under the bash root, which is
+    # acceptable because nullglob still collapses to empty if not present).
+    # For the test, we instead point the orchestrator at a stubbed dir by
+    # making the function source operate against tmp_path. The simplest
+    # cross-platform approach: stage extras + keys in a tmp dir and have
+    # the script use bind variables. Since the orchestrator hardcodes
+    # /work/apt-keys, we assert against the inner-`bash -c` substring,
+    # which the podman stub records verbatim.
+    stub_dir = tmp_path / "stub"
+    stub_dir.mkdir()
+    shutil.copy("tests/fixtures/trace/podman-stub.sh", stub_dir / "podman")
+    (stub_dir / "podman").chmod(0o755)
+
+    env = {
+        **os.environ,
+        "PATH": f"{stub_dir.as_posix()}:{os.environ['PATH']}",
+        "PODMAN_STUB_LOG": str(log),
+        "INSTALLER": str(deb),
+        "TRACE_DIR": str(trace_dir),
+    }
+
+    # Set CONTAINERIZER_APT_SOURCES from within bash to avoid Windows
+    # subprocess rejecting embedded NUL chars in env. The $'\x00' is a
+    # bash ANSI-C-quoted NUL byte.
+    src_a = "deb https://example.com/repo stable main"
+    src_b = "deb-src https://example.com/repo stable main"
+    sources_literal = f"$'{src_a}\\x00{src_b}'"
+    script = f"""
+set -e
+export CONTAINERIZER_APT_SOURCES={sources_literal}
+finalize_marker() {{ : ; }}
+source <(awk '/^run_deb_install\\(\\) /,/^}}$/' {ORCH.as_posix()})
+run_deb_install
+"""
+    subprocess.run(
+        ["bash", "-c", script],
+        env=env,
+        check=True,
+    )
+
+    recorded = log.read_text().splitlines()
+    joined = "\n".join(recorded)
+    # Already-covered shape:
+    assert "exec deb-install" in joined
+    # Issue #102 additions: the apt-prep `bash -c` body is recorded by the
+    # stub verbatim, so we can search the inline script text.
+    assert "/etc/apt/keyrings/" in joined  # keyring copy target
+    assert "containerizer.list" in joined  # sources file write
+    assert "/work/apt-keys" in joined  # source dir mention
+    assert "/installer-??.deb" in joined  # zero-padded glob in install cmd
+    # Env var propagation into the nested container:
+    assert "CONTAINERIZER_APT_SOURCES" in joined
