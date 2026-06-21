@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.4.0...v0.5.0) (2026-06-11)
+
+
+### Features
+
+* **analyze:** parse strace fallback logs for bind/connect/accept ([#93](https://github.com/SupremeCommanderHedgehog/containerizer/issues/93)) ([6f9e29d](https://github.com/SupremeCommanderHedgehog/containerizer/commit/6f9e29d6dbcdd05389535a585b0170da8614d3d9))
+* **runner:** boot systemd as PID 1 for trace runner ([#96](https://github.com/SupremeCommanderHedgehog/containerizer/issues/96)) ([46ad019](https://github.com/SupremeCommanderHedgehog/containerizer/commit/46ad01990cf4c71195b9282de05d7a94c9307bbc))
+
+
+### Bug Fixes
+
+* **runner:** force LF line endings on runner-image scripts ([#88](https://github.com/SupremeCommanderHedgehog/containerizer/issues/88)) ([2671098](https://github.com/SupremeCommanderHedgehog/containerizer/commit/2671098b293602f86d46c12657065fa03ae138fd))
+* **trace,build:** allocate TTY for interactive installers + surface fallback gaps ([#91](https://github.com/SupremeCommanderHedgehog/containerizer/issues/91)) ([e9719eb](https://github.com/SupremeCommanderHedgehog/containerizer/commit/e9719eba38ed028a442757aca6e2ed074c6a456b))
+* **trace:** UniFi Y/N prompt under systemd-PID-1 runner ([#97](https://github.com/SupremeCommanderHedgehog/containerizer/issues/97)) ([8fea5e2](https://github.com/SupremeCommanderHedgehog/containerizer/commit/8fea5e2754f99d012584f06a6b5b56cfcb935b16))
+
+
+### Documentation
+
+* **issue-90:** spec + plan for systemd-as-PID-1 trace runner ([#94](https://github.com/SupremeCommanderHedgehog/containerizer/issues/94)) ([7bf2990](https://github.com/SupremeCommanderHedgehog/containerizer/commit/7bf2990085a10a8127a9227223ef9b05bfe21102))
+
 ## [0.4.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.3.0...v0.4.0) (2026-06-09)
 
 
