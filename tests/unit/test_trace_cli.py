@@ -96,6 +96,9 @@ def test_trace_propagates_stdin_isatty_to_runner(tmp_path: Path) -> None:
                 extra_installers=(),
                 apt_sources=(),
                 apt_keys=(),
+                start_cmd=None,
+                start_ready_seconds=60,
+                verify_soak_seconds=None,
             )
 
     # Terminal case: tty=True must reach the runner.
@@ -505,3 +508,77 @@ def test_trace_cli_caps_extra_installers_at_99(tmp_path: Path, monkeypatch) -> N
     result = CliRunner().invoke(trace_cli.trace_cmd, args)
     assert result.exit_code != 0
     assert "cap is 99" in result.output
+
+
+def test_trace_cli_threads_start_cmd_into_runner(tmp_path: Path, monkeypatch) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.trace import cli as trace_cli
+
+    installer = tmp_path / "foo.deb"
+    installer.write_bytes(b"!<arch>\nfake")
+
+    monkeypatch.setattr(trace_cli, "_podman_machine_is_running", lambda: True)
+
+    captured: dict[str, object] = {}
+
+    class FakeImage:
+        tag = "fake-tag"
+
+        def __init__(self, *, sandbox_dir):
+            pass
+
+        def exists(self):
+            return True
+
+    class FakeRunner:
+        def __init__(self, **kw):
+            captured.update(kw)
+
+        def validate_output_dir(self, *, force):
+            pass
+
+        def run(self):
+            return 0
+
+    monkeypatch.setattr(trace_cli, "RunnerImage", FakeImage)
+    monkeypatch.setattr(trace_cli, "TraceRunner", FakeRunner)
+    monkeypatch.setattr(trace_cli, "_print_summary", lambda *a, **kw: None)
+
+    out = tmp_path / "trace"
+    runner = CliRunner()
+    result = runner.invoke(
+        trace_cli.trace_cmd,
+        [
+            str(installer),
+            "-o", str(out),
+            "--start-cmd", "/etc/init.d/foo start",
+            "--start-ready-seconds", "90",
+            "--verify-soak-seconds", "45",
+        ],
+    )
+    assert result.exit_code == 0, result.output + (result.stderr or "")
+    runner_inst = captured
+    assert runner_inst["start_cmd"] == "/etc/init.d/foo start"
+    assert runner_inst["start_ready_seconds"] == 90
+    assert runner_inst["verify_soak_seconds"] == 45
+
+
+def test_trace_cli_start_ready_seconds_without_start_cmd_errors(tmp_path: Path, monkeypatch) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.trace.cli import trace_cmd
+
+    installer = tmp_path / "foo.deb"
+    installer.write_bytes(b"!<arch>\nfake")
+    monkeypatch.setattr("containerizer.trace.cli._podman_machine_is_running", lambda: True)
+
+    out = tmp_path / "trace"
+    runner = CliRunner()
+    result = runner.invoke(
+        trace_cmd,
+        [str(installer), "-o", str(out), "--start-ready-seconds", "90"],
+    )
+    assert result.exit_code != 0
+    err = (result.stderr or "") + (result.output or "")
+    assert "--start-ready-seconds requires --start-cmd" in err

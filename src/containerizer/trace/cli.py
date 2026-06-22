@@ -100,6 +100,26 @@ def _podman_machine_is_running() -> bool:
     type=click.Path(exists=True, dir_okay=False, readable=True, path_type=Path),
     help="Keyring (.gpg or .asc) copied into /etc/apt/keyrings/ before apt-get update. Repeatable.",
 )
+@click.option(
+    "--start-cmd",
+    default=None,
+    help="Daemon-start command exec'd inside the install container after PHASE_MARKER. "
+         "Composed by the user; passed verbatim to bash -c.",
+)
+@click.option(
+    "--start-ready-seconds",
+    type=int,
+    default=60,
+    help="Seconds to wait for the daemon to bind a port after --start-cmd. "
+         "Only meaningful with --start-cmd.",
+)
+@click.option(
+    "--verify-soak-seconds",
+    type=int,
+    default=None,
+    help="Runtime-soak window after the daemon is ready (defaults to 30s; "
+         "auto-scales to max(60s, --start-ready-seconds) when --start-cmd is set).",
+)
 def trace_cmd(
     installer: Path,
     output_dir: Path,
@@ -107,9 +127,14 @@ def trace_cmd(
     extra_installers: tuple[Path, ...],
     apt_sources: tuple[str, ...],
     apt_keys: tuple[Path, ...],
+    start_cmd: str | None,
+    start_ready_seconds: int,
+    verify_soak_seconds: int | None,
 ) -> None:
     """Run INSTALLER inside the trace sandbox and capture observations."""
     _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
+    if start_cmd is None and start_ready_seconds != 60:
+        raise click.UsageError("--start-ready-seconds requires --start-cmd")
     if not _podman_machine_is_running():
         raise click.ClickException(
             "Podman machine is not running. Start it with: podman machine start"
@@ -121,6 +146,11 @@ def trace_cmd(
     if not image.exists():
         click.echo(f"[image] building {image.tag} (first run, ~5 min)...", err=True)
         image.build(stderr=sys.stderr)
+
+    if verify_soak_seconds is None:
+        resolved_soak = max(60, start_ready_seconds) if start_cmd is not None else 30
+    else:
+        resolved_soak = verify_soak_seconds
 
     runner = TraceRunner(
         image_tag=image.tag,
@@ -138,6 +168,9 @@ def trace_cmd(
         extra_installers=tuple(p.resolve() for p in extra_installers),
         apt_sources=apt_sources,
         apt_keys=tuple(p.resolve() for p in apt_keys),
+        start_cmd=start_cmd,
+        start_ready_seconds=start_ready_seconds,
+        verify_soak_seconds=resolved_soak,
     )
     try:
         runner.validate_output_dir(force=force)
