@@ -445,3 +445,46 @@ PS> containerizer build .\unifi_sysvinit_all.deb `
 - `apt-prep.log` shows the keyring `cp -f` and the sources.list write.
 - `install.log` shows apt fetching `mongodb-org-server` from `repo.mongodb.org`.
 - README's `## Install inputs` lists the apt-source with `[signed-by=…]` stripped.
+
+## Scenario 14 — UniFi + MongoDB end-to-end with `--start-cmd` (#105)
+
+**Goal.** Validates that `--start-cmd` produces a non-sentinel `Containerfile` for a daemon-bearing multi-`.deb` install. After PR #103 the install transaction completes cleanly; this scenario exercises the new PR #105 wiring that actually starts the daemons inside the nested install container so the runtime phase observes their syscalls, binds, and caps.
+
+**Setup.**
+
+1. `unifi_sysvinit_all.deb` in repo root (UniFi 10.4.x).
+2. `mongodb-org-server_8.0.x_amd64.deb` in repo root (matching the UniFi dependency).
+
+**Run.**
+
+```pwsh
+PS> containerizer build .\unifi_sysvinit_all.deb `
+        --installer .\mongodb-org-server_8.0.26_amd64.deb `
+        --name unifi `
+        --start-cmd '/etc/init.d/mongod start && sleep 10 && /etc/init.d/unifi start' `
+        --start-ready-seconds 120 `
+        --keep-intermediates `
+        --skip-verify
+```
+
+`--start-ready-seconds 120` is the floor for the JVM warmup + UniFi schema migration (30–90 s observed). With `--start-cmd` set and no explicit `--verify-soak-seconds`, the install-phase runtime soak auto-scales to `max(60s, --start-ready-seconds)` — here, 120 s — so the analyzer sees real steady-state daemon activity rather than just startup.
+
+**Acceptance.**
+
+- Build exits 0.
+- `out/unifi/Containerfile` exists; entrypoint references `java -jar /usr/lib/unifi/lib/ace.jar start` (or another long-running JVM process the analyzer's entrypoint inference latches onto).
+- `out/unifi/unifi.container` Quadlet unit present.
+- `out/unifi/seccomp.json` non-empty.
+- `out/unifi/README.md` contains a `Start command:` subsection under `## Install inputs` listing the literal command, `Ready timeout: 120s`, and `Verify soak: 120s`.
+- Runtime allowlist lists UniFi ports `8443`, `8080`, `8843`, `8880` plus MongoDB `27017`.
+- Volumes include `/var/lib/mongodb` and `/usr/lib/unifi/data`.
+- `out/unifi/.intermediates/trace/install/start.exitcode` is `0`; `start.log` shows both init scripts run.
+
+**Known gotchas.**
+
+- The nested install container runs `sleep infinity` (no systemd), so `/etc/init.d/unifi start` may silently no-op via `policy-rc.d=101`. If `start.log` shows the init script returning 0 but `bind.jsonl` never records port 8443, fall back to direct invocations:
+  ```
+  --start-cmd 'sudo -u mongodb /usr/bin/mongod --fork --config /etc/mongod.conf && sleep 5 && /usr/sbin/unifi-network-service-helper init && sudo -u unifi /usr/bin/java -jar /usr/lib/unifi/lib/ace.jar start &'
+  ```
+- UniFi expects `UNIFI_MONGODB_SERVICE_ENABLED=false` (the default in `/etc/default/unifi`). If MongoDB connectivity fails, verify that file wasn't overwritten by the user's `--start-cmd`.
+- 1.5 GB minimum container memory: the JVM defaults to `-Xmx1024M` and crashes on smaller cgroups. Add `Memory=2G` to the generated Quadlet if you plan to run under a tight limit.
