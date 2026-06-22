@@ -316,8 +316,10 @@ def test_build_cli_no_longer_warns_about_start_cmd(tmp_path: Path, monkeypatch) 
     installer.write_bytes(b"!<arch>\nfake")
 
     monkeypatch.setattr("containerizer.build.cli.preflight_podman", lambda: None)
+
     def _boom(*a, **kw):
         raise SystemExit(0)
+
     monkeypatch.setattr("containerizer.build.cli.run_pipeline", _boom)
 
     runner = CliRunner()
@@ -361,18 +363,24 @@ def test_build_cli_accepts_start_cmd_and_ready_seconds_together(
     installer.write_bytes(b"!<arch>\nfake")
     monkeypatch.setattr("containerizer.build.cli.preflight_podman", lambda: None)
     captured = {}
+
     def _capture(config, **kw):
         captured["config"] = config
         raise SystemExit(0)
+
     monkeypatch.setattr("containerizer.build.cli.run_pipeline", _capture)
 
     runner = CliRunner()
     result = runner.invoke(
         build_cmd,
         [
-            str(installer), "--name", "foo",
-            "--start-cmd", "/etc/init.d/foo start",
-            "--start-ready-seconds", "90",
+            str(installer),
+            "--name",
+            "foo",
+            "--start-cmd",
+            "/etc/init.d/foo start",
+            "--start-ready-seconds",
+            "90",
         ],
     )
     assert result.exit_code == 0, result.output

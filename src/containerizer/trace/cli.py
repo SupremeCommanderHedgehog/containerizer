@@ -104,21 +104,21 @@ def _podman_machine_is_running() -> bool:
     "--start-cmd",
     default=None,
     help="Daemon-start command exec'd inside the install container after PHASE_MARKER. "
-         "Composed by the user; passed verbatim to bash -c.",
+    "Composed by the user; passed verbatim to bash -c.",
 )
 @click.option(
     "--start-ready-seconds",
     type=int,
     default=60,
     help="Seconds to wait for the daemon to bind a port after --start-cmd. "
-         "Only meaningful with --start-cmd.",
+    "Only meaningful with --start-cmd.",
 )
 @click.option(
     "--verify-soak-seconds",
     type=int,
     default=None,
     help="Runtime-soak window after the daemon is ready (defaults to 30s; "
-         "auto-scales to max(60s, --start-ready-seconds) when --start-cmd is set).",
+    "auto-scales to max(60s, --start-ready-seconds) when --start-cmd is set).",
 )
 def trace_cmd(
     installer: Path,

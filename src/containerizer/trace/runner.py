@@ -154,10 +154,16 @@ class TraceRunner:
             "-e",
             f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
             # Issue #105: start-cmd transport (env vars only present when start_cmd set).
-            *((
-                "-e", f"CONTAINERIZER_START_CMD={self.start_cmd}",
-                "-e", f"CONTAINERIZER_START_READY_SECONDS={self.start_ready_seconds}",
-            ) if self.start_cmd else ()),
+            *(
+                (
+                    "-e",
+                    f"CONTAINERIZER_START_CMD={self.start_cmd}",
+                    "-e",
+                    f"CONTAINERIZER_START_READY_SECONDS={self.start_ready_seconds}",
+                )
+                if self.start_cmd
+                else ()
+            ),
             # Issue #105: runtime-soak window. Always set; orchestrator only sleeps when
             # CONTAINERIZER_START_CMD is also set, so this is a no-op for non-start-cmd runs.
             "-e",

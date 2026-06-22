@@ -162,7 +162,7 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
         systemd_unit=None,
         init_script_body=(
             "#!/bin/sh\n"
-            "case \"$1\" in\n"
+            'case "$1" in\n'
             "  start) (nc -l -p 9999 &) ; sleep 0.5 ;;\n"
             "  *) echo unsupported ;;\n"
             "esac\n"
@@ -175,11 +175,17 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
     try:
         result = subprocess.run(
             [
-                "containerizer", "trace", str(deb),
-                "-o", str(out),
-                "--start-cmd", "/etc/init.d/foo start",
-                "--start-ready-seconds", "30",
-                "--verify-soak-seconds", "5",
+                "containerizer",
+                "trace",
+                str(deb),
+                "-o",
+                str(out),
+                "--start-cmd",
+                "/etc/init.d/foo start",
+                "--start-ready-seconds",
+                "30",
+                "--verify-soak-seconds",
+                "5",
             ],
             stdin=subprocess.DEVNULL,
             capture_output=True,

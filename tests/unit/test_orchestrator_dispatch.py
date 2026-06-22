@@ -195,15 +195,15 @@ def test_run_deb_install_executes_start_cmd_post_phase_marker() -> None:
     from pathlib import Path
 
     script = Path("sandbox/runner_image/trace-orchestrator.sh").read_text(encoding="utf-8")
-    pm_idx = script.index('PHASE_MARKER')
-    start_idx = script.index('CONTAINERIZER_START_CMD')
+    pm_idx = script.index("PHASE_MARKER")
+    start_idx = script.index("CONTAINERIZER_START_CMD")
     assert start_idx > pm_idx, "start-cmd block must follow PHASE_MARKER write"
     assert 'podman exec deb-install bash -c "$CONTAINERIZER_START_CMD"' in script
-    assert 'podman exec deb-install ss -tlnp' in script
-    assert 'CONTAINERIZER_START_READY_SECONDS' in script
-    assert 'CONTAINERIZER_VERIFY_SOAK_SECONDS' in script
-    assert 'TRACE_DIR/start.log' in script
-    assert 'TRACE_DIR/start.exitcode' in script
+    assert "podman exec deb-install ss -tlnp" in script
+    assert "CONTAINERIZER_START_READY_SECONDS" in script
+    assert "CONTAINERIZER_VERIFY_SOAK_SECONDS" in script
+    assert "TRACE_DIR/start.log" in script
+    assert "TRACE_DIR/start.exitcode" in script
 
 
 @pytest.mark.skipif(shutil.which("bash") is None, reason="bash required")
@@ -213,11 +213,11 @@ def test_run_elf_install_executes_start_cmd_post_phase_marker() -> None:
     from pathlib import Path
 
     script = Path("sandbox/runner_image/trace-orchestrator.sh").read_text(encoding="utf-8")
-    elf_start = script.index('run_elf_install()')
-    elf_end = script.index('run_deb_install()')
+    elf_start = script.index("run_elf_install()")
+    elf_end = script.index("run_deb_install()")
     elf_body = script[elf_start:elf_end]
-    assert 'CONTAINERIZER_START_CMD' in elf_body
+    assert "CONTAINERIZER_START_CMD" in elf_body
     assert 'bash -c "$CONTAINERIZER_START_CMD"' in elf_body
     # No podman exec inside the ELF block.
     assert 'podman exec deb-install bash -c "$CONTAINERIZER_START_CMD"' not in elf_body
-    assert 'ss -tlnp' in elf_body
+    assert "ss -tlnp" in elf_body

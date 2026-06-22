@@ -54,7 +54,7 @@ class PreflightError(RuntimeError):
     type=int,
     default=60,
     help="Seconds to wait for the daemon to bind a port after --start-cmd "
-         "before proceeding. Only meaningful with --start-cmd.",
+    "before proceeding. Only meaningful with --start-cmd.",
 )
 @click.option(
     "-o",
@@ -73,8 +73,8 @@ class PreflightError(RuntimeError):
     type=int,
     default=None,
     help="Verify-phase idle observation window after daemon-ready. "
-         "Defaults to 30s; when --start-cmd is set, auto-scales to "
-         "max(60s, --start-ready-seconds).",
+    "Defaults to 30s; when --start-cmd is set, auto-scales to "
+    "max(60s, --start-ready-seconds).",
 )
 @click.option(
     "--skip-verify",

@@ -89,9 +89,7 @@ def run_pipeline(
         install_extras=config.extra_installers,
         install_apt_sources=config.apt_sources,
         install_start_cmd=config.start_cmd,
-        install_start_ready_seconds=(
-            config.start_ready_seconds if config.start_cmd else None
-        ),
+        install_start_ready_seconds=(config.start_ready_seconds if config.start_cmd else None),
         install_verify_soak_seconds=(
             config.effective_verify_soak_seconds if config.start_cmd else None
         ),

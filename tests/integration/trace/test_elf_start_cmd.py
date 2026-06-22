@@ -44,11 +44,17 @@ def test_elf_with_start_cmd_produces_runtime_observation(tmp_path: Path) -> None
     try:
         result = subprocess.run(
             [
-                "containerizer", "trace", str(installer),
-                "-o", str(out),
-                "--start-cmd", "nc -l -p 9999 &",
-                "--start-ready-seconds", "30",
-                "--verify-soak-seconds", "5",
+                "containerizer",
+                "trace",
+                str(installer),
+                "-o",
+                str(out),
+                "--start-cmd",
+                "nc -l -p 9999 &",
+                "--start-ready-seconds",
+                "30",
+                "--verify-soak-seconds",
+                "5",
             ],
             stdin=subprocess.DEVNULL,
             capture_output=True,

@@ -551,10 +551,14 @@ def test_trace_cli_threads_start_cmd_into_runner(tmp_path: Path, monkeypatch) ->
         trace_cli.trace_cmd,
         [
             str(installer),
-            "-o", str(out),
-            "--start-cmd", "/etc/init.d/foo start",
-            "--start-ready-seconds", "90",
-            "--verify-soak-seconds", "45",
+            "-o",
+            str(out),
+            "--start-cmd",
+            "/etc/init.d/foo start",
+            "--start-ready-seconds",
+            "90",
+            "--verify-soak-seconds",
+            "45",
         ],
     )
     assert result.exit_code == 0, result.output + (result.stderr or "")
