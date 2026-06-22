@@ -147,6 +147,9 @@ def _generate(c: Calls, layout: PathLayout) -> Callable[..., None]:
         install_primary: Path | None = None,
         install_extras: tuple[Path, ...] = (),
         install_apt_sources: tuple[str, ...] = (),
+        install_start_cmd: str | None = None,
+        install_start_ready_seconds: int | None = None,
+        install_verify_soak_seconds: int | None = None,
     ) -> None:
         c.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
@@ -541,6 +544,9 @@ def test_missing_readme_after_generate_raises_clear_error(tmp_path: Path) -> Non
         install_primary: Path | None = None,
         install_extras: tuple[Path, ...] = (),
         install_apt_sources: tuple[str, ...] = (),
+        install_start_cmd: str | None = None,
+        install_start_ready_seconds: int | None = None,
+        install_verify_soak_seconds: int | None = None,
     ) -> None:
         calls.order.append("generate")
         final_dir.mkdir(parents=True, exist_ok=True)
