@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.8.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.7.0...v0.8.0) (2026-06-22)
+
+
+### Features
+
+* **trace:** --start-cmd to launch daemons during install ([#105](https://github.com/SupremeCommanderHedgehog/containerizer/issues/105)) ([#106](https://github.com/SupremeCommanderHedgehog/containerizer/issues/106)) ([13e0bb0](https://github.com/SupremeCommanderHedgehog/containerizer/commit/13e0bb0a448d05a44f093e4a9f624c53391a662e))
+
 ## [0.7.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.6.0...v0.7.0) (2026-06-21)
 
 
