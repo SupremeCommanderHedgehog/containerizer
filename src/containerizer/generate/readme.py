@@ -19,6 +19,9 @@ def render_readme(
     install_primary: Path | None = None,
     install_extras: tuple[Path, ...] = (),
     install_apt_sources: tuple[str, ...] = (),
+    install_start_cmd: str | None = None,
+    install_start_ready_seconds: int | None = None,
+    install_verify_soak_seconds: int | None = None,
 ) -> str:
     """Render the README.md describing the generated artifacts.
 
@@ -45,7 +48,14 @@ def render_readme(
 
     sections.append(_render_what_was_generated(name, skipped))
     sections.append(_render_audit_trail(policy.warnings))
-    install_inputs = _render_install_inputs(install_primary, install_extras, install_apt_sources)
+    install_inputs = _render_install_inputs(
+        install_primary,
+        install_extras,
+        install_apt_sources,
+        start_cmd=install_start_cmd,
+        start_ready_seconds=install_start_ready_seconds,
+        verify_soak_seconds=install_verify_soak_seconds,
+    )
     if install_inputs:
         sections.append(install_inputs)
     sections.append(_render_runtime_allowlist(runtime))
@@ -80,9 +90,13 @@ def _render_install_inputs(
     primary: Path | None,
     extras: tuple[Path, ...],
     apt_sources: tuple[str, ...],
+    *,
+    start_cmd: str | None = None,
+    start_ready_seconds: int | None = None,
+    verify_soak_seconds: int | None = None,
 ) -> str:
     """Render the 'Install inputs' section. Returns '' when nothing to render."""
-    if primary is None and not extras and not apt_sources:
+    if primary is None and not extras and not apt_sources and start_cmd is None:
         return ""
     lines = ["## Install inputs\n"]
     if primary is not None:
@@ -101,6 +115,14 @@ def _render_install_inputs(
             # [trusted=yes] into user-facing output.
             cleaned = _APT_BRACKET_OPTS.sub("", src).strip()
             lines.append(f"- `{cleaned}`")
+        lines.append("")
+    if start_cmd is not None:
+        lines.append("Start command:")
+        lines.append(f"- `{start_cmd}`")
+        if start_ready_seconds is not None:
+            lines.append(f"- Ready timeout: {start_ready_seconds}s")
+        if verify_soak_seconds is not None:
+            lines.append(f"- Verify soak: {verify_soak_seconds}s")
         lines.append("")
     return "\n".join(lines)
 

@@ -61,6 +61,8 @@ def run_pipeline(
         extra_installers=config.extra_installers,
         apt_sources=config.apt_sources,
         apt_keys=config.apt_keys,
+        start_ready_seconds=config.start_ready_seconds,
+        verify_soak_seconds=config.effective_verify_soak_seconds,
     )
     marker = _read_install_marker(layout.trace_original_dir)
     if marker == "PARTIAL":
@@ -86,6 +88,11 @@ def run_pipeline(
         install_primary=config.installer,
         install_extras=config.extra_installers,
         install_apt_sources=config.apt_sources,
+        install_start_cmd=config.start_cmd,
+        install_start_ready_seconds=(config.start_ready_seconds if config.start_cmd else None),
+        install_verify_soak_seconds=(
+            config.effective_verify_soak_seconds if config.start_cmd else None
+        ),
     )
 
     # 4a. sentinel
@@ -123,7 +130,7 @@ def run_pipeline(
     _say(
         stderr,
         f"[verify]   running generated image under strict policy "
-        f"(soak {config.verify_soak_seconds}s)",
+        f"(soak {config.effective_verify_soak_seconds}s)",
     )
     layout.trace_verify_dir.mkdir(parents=True, exist_ok=True)
     run_flags = podman_run_flags(policy)
@@ -131,7 +138,7 @@ def run_pipeline(
         image_tar,
         run_flags,
         image_tag,
-        config.verify_soak_seconds,
+        config.effective_verify_soak_seconds,
         layout.trace_verify_dir,
     )
 
