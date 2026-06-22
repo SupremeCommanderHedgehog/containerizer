@@ -43,6 +43,10 @@ class TraceRunner:
     apt_sources: tuple[str, ...] = ()
     apt_keys: tuple[Path, ...] = ()
 
+    # Issue #105: install-mode-only.
+    start_cmd: str | None = None
+    start_ready_seconds: int = 60
+
     # Verify-mode-only fields. All default to None; validated in __post_init__.
     verify_image_tar: Path | None = None
     verify_image_tag: str | None = None
@@ -67,9 +71,9 @@ class TraceRunner:
             ]
             if missing:
                 raise ValueError(f"verify mode requires: {', '.join(missing)}")
-            if self.extra_installers or self.apt_sources or self.apt_keys:
+            if self.extra_installers or self.apt_sources or self.apt_keys or self.start_cmd:
                 raise ValueError(
-                    "verify mode does not accept extra installers, apt sources, or apt keys"
+                    "verify mode does not accept extra installers, apt sources, apt keys, or start_cmd"
                 )
 
     def argv(self) -> list[str]:

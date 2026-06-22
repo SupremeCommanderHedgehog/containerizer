@@ -389,3 +389,56 @@ def test_run_does_not_write_apt_sources_when_empty(tmp_path: Path, monkeypatch) 
     runner.run()
 
     assert not (out / "apt-sources.list").exists()
+
+
+def test_install_mode_accepts_start_cmd_and_ready_seconds(tmp_path: Path) -> None:
+    installer = tmp_path / "install.sh"
+    installer.write_text("#!/bin/sh\nexit 0\n", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=output,
+        start_cmd="/etc/init.d/foo start",
+        start_ready_seconds=90,
+    )
+    assert runner.start_cmd == "/etc/init.d/foo start"
+    assert runner.start_ready_seconds == 90
+
+
+def test_install_mode_defaults_start_cmd_to_none_and_ready_to_60(tmp_path: Path) -> None:
+    installer = tmp_path / "install.sh"
+    installer.write_text("", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=output,
+    )
+    assert runner.start_cmd is None
+    assert runner.start_ready_seconds == 60
+
+
+def test_verify_mode_rejects_start_cmd(tmp_path: Path) -> None:
+    image_tar = tmp_path / "image.tar"
+    image_tar.write_bytes(b"x")
+    seccomp = tmp_path / "seccomp.json"
+    seccomp.write_text("{}", encoding="utf-8")
+    out = tmp_path / "verify-trace"
+
+    with pytest.raises(ValueError, match="verify mode does not accept"):
+        TraceRunner(
+            image_tag="runner:latest",
+            installer=None,
+            output_dir=out,
+            mode="verify",
+            verify_image_tar=image_tar,
+            verify_image_tag="generated:tag",
+            verify_soak_seconds=30,
+            verify_seccomp_path=seccomp,
+            start_cmd="/etc/init.d/foo start",
+        )
