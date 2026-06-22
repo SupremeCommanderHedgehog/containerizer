@@ -21,8 +21,14 @@ class BuildConfig(BaseModel):
     out_dir: Path
     base_image: str | None = None
     start_cmd: str | None = None
+    # Issue #105: --start-cmd companion. Only meaningful when start_cmd is set;
+    # CLI validates that combination.
+    start_ready_seconds: int = 60
     keep_intermediates: bool = False
-    verify_soak_seconds: int = 30
+    # Issue #105: sentinel-None default so the CLI can distinguish "user
+    # explicitly set 30" from "user didn't set anything" and the auto-scale
+    # in effective_verify_soak_seconds can fire only in the latter case.
+    verify_soak_seconds: int | None = None
     skip_verify: bool = False
     debug: bool = False
 
@@ -30,6 +36,17 @@ class BuildConfig(BaseModel):
     extra_installers: tuple[Path, ...] = ()
     apt_sources: tuple[str, ...] = ()
     apt_keys: tuple[Path, ...] = ()
+
+    @property
+    def effective_verify_soak_seconds(self) -> int:
+        """Resolved soak value. Explicit --verify-soak-seconds always wins.
+        Otherwise: 30 by default, max(60, start_ready_seconds) when
+        --start-cmd is set."""
+        if self.verify_soak_seconds is not None:
+            return self.verify_soak_seconds
+        if self.start_cmd is not None:
+            return max(60, self.start_ready_seconds)
+        return 30
 
 
 class BuildResult(BaseModel):
