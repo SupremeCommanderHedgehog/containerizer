@@ -233,6 +233,30 @@ run_elf_install() {
     awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
         > "$TRACE_DIR/PHASE_MARKER"
 
+    if [[ -n "${CONTAINERIZER_START_CMD:-}" ]]; then
+        echo "trace-orchestrator: starting daemon(s) via --start-cmd" >&2
+        start_rc=0
+        bash -c "$CONTAINERIZER_START_CMD" \
+            > "$TRACE_DIR/start.log" 2>&1 || start_rc=$?
+        echo "$start_rc" > "$TRACE_DIR/start.exitcode"
+
+        deadline=$(( $(date +%s) + ${CONTAINERIZER_START_READY_SECONDS:-60} ))
+        ready=0
+        while (( $(date +%s) < deadline )); do
+            if ss -tlnp 2>/dev/null | grep -q LISTEN; then
+                echo "trace-orchestrator: daemon ready (LISTEN observed)" >&2
+                ready=1
+                break
+            fi
+            sleep 2
+        done
+        if (( ready == 0 )); then
+            echo "trace-orchestrator: ready-poll timed out after ${CONTAINERIZER_START_READY_SECONDS:-60}s; proceeding" >&2
+        fi
+
+        sleep "${CONTAINERIZER_VERIFY_SOAK_SECONDS:-30}"
+    fi
+
     if [[ "$interactive" == 1 ]]; then
         echo "trace-orchestrator: installer complete. exercise the software, then press <Enter> here to finalise (or close stdin)." >&2
         # read returns non-zero on EOF; we treat both Enter and EOF as the COMPLETE path.
