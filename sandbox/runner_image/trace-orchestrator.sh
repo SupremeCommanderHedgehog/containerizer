@@ -380,6 +380,35 @@ run_deb_install() {
     awk '{split($1,a,"."); printf "monotonic_ns: %s%09d\n", a[1], a[2]*10000000}' /proc/uptime \
         > "$TRACE_DIR/PHASE_MARKER"
 
+    if [[ -n "${CONTAINERIZER_START_CMD:-}" ]]; then
+        echo "trace-orchestrator: starting daemon(s) via --start-cmd" >&2
+        start_rc=0
+        podman exec deb-install bash -c "$CONTAINERIZER_START_CMD" \
+            > "$TRACE_DIR/start.log" 2>&1 || start_rc=$?
+        echo "$start_rc" > "$TRACE_DIR/start.exitcode"
+
+        # Ready-poll: any LISTEN line in the nested container, timeout fallback.
+        deadline=$(( $(date +%s) + ${CONTAINERIZER_START_READY_SECONDS:-60} ))
+        ready=0
+        while (( $(date +%s) < deadline )); do
+            if podman exec deb-install ss -tlnp 2>/dev/null | grep -q LISTEN; then
+                echo "trace-orchestrator: daemon ready (LISTEN observed)" >&2
+                ready=1
+                break
+            fi
+            sleep 2
+        done
+        if (( ready == 0 )); then
+            echo "trace-orchestrator: ready-poll timed out after ${CONTAINERIZER_START_READY_SECONDS:-60}s; proceeding" >&2
+        fi
+
+        # Runtime soak: let the daemon do real work before finalize. Reuses
+        # CONTAINERIZER_VERIFY_SOAK_SECONDS (governs both install and verify
+        # observation windows) -- pipeline resolves to max(60, start_ready_seconds)
+        # when --start-cmd is set.
+        sleep "${CONTAINERIZER_VERIFY_SOAK_SECONDS:-30}"
+    fi
+
     if [[ -n "${CONTAINERIZER_INTERACTIVE:-}" ]]; then
         interactive="${CONTAINERIZER_INTERACTIVE}"
     elif [[ -t 1 ]]; then
