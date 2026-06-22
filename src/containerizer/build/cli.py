@@ -241,12 +241,14 @@ def _default_probe_fn(installer: Path, base_image: str | None) -> ProbeResult:
 
 def _default_install_trace_fn(
     installer: Path,
-    start_cmd: str | None,  # reserved for future orchestrator env wiring
+    start_cmd: str | None,
     output_dir: Path,
     *,
     extra_installers: tuple[Path, ...] = (),
     apt_sources: tuple[str, ...] = (),
     apt_keys: tuple[Path, ...] = (),
+    start_ready_seconds: int = 60,
+    verify_soak_seconds: int = 30,
 ) -> int:
     image = RunnerImage(sandbox_dir=_sandbox_dir())
     if not image.exists():
@@ -261,6 +263,9 @@ def _default_install_trace_fn(
         extra_installers=extra_installers,
         apt_sources=apt_sources,
         apt_keys=apt_keys,
+        start_cmd=start_cmd,
+        start_ready_seconds=start_ready_seconds,
+        verify_soak_seconds=verify_soak_seconds,
     )
     return runner.run()
 

@@ -657,7 +657,58 @@ def test_pipeline_passes_multi_deb_fields_to_install_trace_fn(tmp_path: Path) ->
         "extra_installers": (extra,),
         "apt_sources": sources,
         "apt_keys": (key,),
+        "start_ready_seconds": 60,
+        "verify_soak_seconds": 30,
     }
+    # Sentinel policy means verify is skipped -- install_trace runs exactly
+    # once (for the ORIGINAL trace) and never again for verify retrace.
+    assert calls.order.count("install_trace") == 1
+    assert "verify_trace" not in calls.order
+
+
+def test_pipeline_threads_start_cmd_and_effective_soak_to_install_trace_fn(tmp_path: Path) -> None:
+    """Issue #105: pipeline must forward start_ready_seconds and the resolved
+    effective_verify_soak_seconds to install_trace_fn."""
+    calls = Calls(order=[])
+    layout = _build_layout(tmp_path)
+    layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
+
+    captured: dict[str, object] = {}
+
+    def install_capturing(
+        installer: Path,
+        start_cmd: str | None,
+        output_dir: Path,
+        **kwargs: object,
+    ) -> int:
+        calls.order.append("install_trace")
+        captured.update(kwargs)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "COMPLETE").write_text("", encoding="utf-8")
+        return 0
+
+    cfg = _cfg(
+        tmp_path,
+        start_cmd="/etc/init.d/foo start",
+        start_ready_seconds=90,
+    )
+
+    run_pipeline(
+        cfg,
+        probe_fn=_probe(calls),
+        install_trace_fn=install_capturing,
+        parse_trace_fn=_parse_trace(calls),
+        derive_policy_fn=_derive_policy(calls, _policy([SENTINEL_ENTRYPOINT])),
+        generate_fn=_generate(calls, layout),
+        podman_build_fn=_podman_build(calls, layout),
+        verify_trace_fn=_verify_trace_writing_complete(calls),
+        diff_fn=_diff(calls),
+        layout=layout,
+        stderr=io.StringIO(),
+    )
+
+    assert captured.get("start_ready_seconds") == 90
+    assert captured.get("verify_soak_seconds") == 90  # auto-scaled from start_ready_seconds
     # Sentinel policy means verify is skipped -- install_trace runs exactly
     # once (for the ORIGINAL trace) and never again for verify retrace.
     assert calls.order.count("install_trace") == 1
