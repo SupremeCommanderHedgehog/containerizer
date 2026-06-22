@@ -76,10 +76,10 @@ start_ready_seconds: int = 60
 *(("-e", f"CONTAINERIZER_START_CMD={self.start_cmd}",
    "-e", f"CONTAINERIZER_START_READY_SECONDS={self.start_ready_seconds}")
   if self.start_cmd else ()),
-"-e", f"CONTAINERIZER_VERIFY_SOAK_SECONDS={self.verify_soak_seconds_for_install}",
+"-e", f"CONTAINERIZER_VERIFY_SOAK_SECONDS={self.verify_soak_seconds}",
 ```
 
-`verify_soak_seconds_for_install: int` is a new install-mode field (default 30) that the pipeline resolves to the user-explicit value or `max(60, start_ready_seconds)` (see §3.4). Verify mode continues to use its own `verify_soak_seconds: int | None` field; the install-mode field is structurally separate so verify-mode validation doesn't complain about `verify_soak_seconds_for_install` being set in install mode.
+The existing `verify_soak_seconds: int | None` field is reused for both modes. Verify-mode validation already requires it non-None; install-mode reads it whenever set (pipeline always resolves to a concrete int — see §3.4). When neither `start_cmd` nor an explicit `--verify-soak-seconds` is supplied, the pipeline resolves to 30 and the env var still flows through (the install-mode orchestrator's runtime-soak `sleep` is gated on `${CONTAINERIZER_START_CMD:-}` so this is a no-op for non-start-cmd runs).
 
 ### 3.2 Orchestrator `run_deb_install` block
 
@@ -189,10 +189,10 @@ def effective_verify_soak_seconds(self) -> int:
 
 `run_pipeline` reads `config.effective_verify_soak_seconds` and passes it to both:
 
-- `install_trace_fn(..., verify_soak_seconds=...)` → `TraceRunner.verify_soak_seconds_for_install` → install-mode argv `-e CONTAINERIZER_VERIFY_SOAK_SECONDS=…`.
-- `verify_trace_fn(..., soak_seconds=...)` (existing) → `TraceRunner.verify_soak_seconds` → verify-mode argv `-e VERIFY_SOAK_SECONDS=…`.
+- `install_trace_fn(..., verify_soak_seconds=...)` → `TraceRunner.verify_soak_seconds` (install mode) → install-mode argv `-e CONTAINERIZER_VERIFY_SOAK_SECONDS=…`.
+- `verify_trace_fn(..., soak_seconds=...)` (existing) → `TraceRunner.verify_soak_seconds` (verify mode) → verify-mode argv `-e VERIFY_SOAK_SECONDS=…`.
 
-Two TraceRunner fields (`verify_soak_seconds` for verify mode, `verify_soak_seconds_for_install` for install mode) instead of one because of the existing `__post_init__` validation that rejects verify-only fields in install mode. The pipeline writes the same resolved value to both.
+One TraceRunner field serves both modes — install-mode argv reads it whenever non-None (pipeline always resolves to a concrete int). Two distinct env-var names (`CONTAINERIZER_VERIFY_SOAK_SECONDS` for install, `VERIFY_SOAK_SECONDS` for verify) so the verify-orchestrator's existing env-var contract stays unchanged. Renaming to a single shared name is a follow-up cleanup.
 
 CLI validation: `--start-ready-seconds` without `--start-cmd` raises `click.UsageError` so the user catches the mistake at parse time instead of confusion when the value is ignored.
 
