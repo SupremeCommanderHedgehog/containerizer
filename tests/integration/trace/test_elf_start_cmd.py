@@ -70,6 +70,7 @@ def test_elf_with_start_cmd_produces_runtime_observation(tmp_path: Path) -> None
         assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr:\n{result.stderr}"
         assert (out / "start.log").exists()
         assert (out / "start.exitcode").exists()
+        assert (out / "start.exitcode").read_text().strip() == "0"
         bind = (out / "bind.jsonl").read_text(errors="replace")
         assert "9999" in bind, f"port 9999 not seen in bind.jsonl; head:\n{bind[:500]}"
     except AssertionError:
