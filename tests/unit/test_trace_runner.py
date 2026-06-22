@@ -442,3 +442,53 @@ def test_verify_mode_rejects_start_cmd(tmp_path: Path) -> None:
             verify_seccomp_path=seccomp,
             start_cmd="/etc/init.d/foo start",
         )
+
+
+def test_install_argv_includes_start_cmd_env_when_set(tmp_path: Path) -> None:
+    installer = tmp_path / "install.sh"
+    installer.write_text("", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=output,
+        start_cmd="/etc/init.d/foo start && sleep 1",
+        start_ready_seconds=90,
+    )
+    argv = runner.argv()
+    assert "CONTAINERIZER_START_CMD=/etc/init.d/foo start && sleep 1" in argv
+    assert "CONTAINERIZER_START_READY_SECONDS=90" in argv
+
+
+def test_install_argv_omits_start_cmd_env_when_unset(tmp_path: Path) -> None:
+    installer = tmp_path / "install.sh"
+    installer.write_text("", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=output,
+    )
+    argv = runner.argv()
+    assert not any(a.startswith("CONTAINERIZER_START_CMD=") for a in argv)
+    assert not any(a.startswith("CONTAINERIZER_START_READY_SECONDS=") for a in argv)
+
+
+def test_install_argv_always_includes_verify_soak_env(tmp_path: Path) -> None:
+    installer = tmp_path / "install.sh"
+    installer.write_text("", encoding="utf-8")
+    output = tmp_path / "trace"
+    output.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner:latest",
+        installer=installer,
+        output_dir=output,
+        verify_soak_seconds=45,
+    )
+    argv = runner.argv()
+    assert "CONTAINERIZER_VERIFY_SOAK_SECONDS=45" in argv

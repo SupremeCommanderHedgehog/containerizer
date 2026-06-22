@@ -152,6 +152,15 @@ class TraceRunner:
             "CONTAINERIZER_INSTALLER=/installer",
             "-e",
             f"CONTAINERIZER_INTERACTIVE={1 if self.tty else 0}",
+            # Issue #105: start-cmd transport (env vars only present when start_cmd set).
+            *((
+                "-e", f"CONTAINERIZER_START_CMD={self.start_cmd}",
+                "-e", f"CONTAINERIZER_START_READY_SECONDS={self.start_ready_seconds}",
+            ) if self.start_cmd else ()),
+            # Issue #105: runtime-soak window. Always set; orchestrator only sleeps when
+            # CONTAINERIZER_START_CMD is also set, so this is a no-op for non-start-cmd runs.
+            "-e",
+            f"CONTAINERIZER_VERIFY_SOAK_SECONDS={self.verify_soak_seconds if self.verify_soak_seconds is not None else 30}",
             # Issue #102: apt-source lines are transported via a file written by
             # run() to output_dir/apt-sources.list (mounted at
             # /work/trace/apt-sources.list inside the runner). Env-var transport
