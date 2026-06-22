@@ -147,3 +147,63 @@ def test_multi_deb_install_satisfies_dep(tmp_path: Path) -> None:
     except AssertionError:
         _dump_trace_dir(out, reason="multi-deb assertion failure")
         raise
+
+
+@pytest.mark.integration
+def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None:
+    """Issue #105: --start-cmd fires a daemon, ready-poll observes LISTEN, soak
+    captures runtime activity, analyzer derives a non-sentinel policy."""
+    deb = tmp_path / "foo_1.0_amd64.deb"
+    build_minimal_deb(
+        deb,
+        package="foo",
+        version="1.0",
+        depends="netcat-openbsd",
+        systemd_unit=None,
+        init_script_body=(
+            "#!/bin/sh\n"
+            "case \"$1\" in\n"
+            "  start) (nc -l -p 9999 &) ; sleep 0.5 ;;\n"
+            "  *) echo unsupported ;;\n"
+            "esac\n"
+        ),
+    )
+
+    out = tmp_path / "trace"
+    out.mkdir()
+
+    try:
+        result = subprocess.run(
+            [
+                "containerizer", "trace", str(deb),
+                "-o", str(out),
+                "--start-cmd", "/etc/init.d/foo start",
+                "--start-ready-seconds", "30",
+                "--verify-soak-seconds", "5",
+            ],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=900,
+        )
+    except subprocess.TimeoutExpired as exc:
+        _dump_trace_dir(out, reason=f"TimeoutExpired after {exc.timeout}s")
+        raise
+
+    if result.returncode != 0:
+        _dump_trace_dir(out, reason=f"returncode={result.returncode}")
+        raise AssertionError(
+            f"containerizer trace exited {result.returncode}\n"
+            f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}"
+        )
+
+    try:
+        assert (out / "COMPLETE").exists(), f"no COMPLETE marker; stderr:\n{result.stderr}"
+        assert (out / "start.log").exists()
+        assert (out / "start.exitcode").exists()
+        assert (out / "start.exitcode").read_text().strip() == "0"
+        bind = (out / "bind.jsonl").read_text(errors="replace")
+        assert "9999" in bind, f"port 9999 not seen in bind.jsonl; head:\n{bind[:500]}"
+    except AssertionError:
+        _dump_trace_dir(out, reason="start-cmd integration assertion failure")
+        raise
