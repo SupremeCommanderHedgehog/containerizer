@@ -18,7 +18,7 @@ def test_build_config_round_trip_defaults() -> None:
     assert cfg.base_image is None
     assert cfg.start_cmd is None
     assert cfg.keep_intermediates is False
-    assert cfg.verify_soak_seconds == 30
+    assert cfg.verify_soak_seconds is None  # Issue #105: sentinel default
     assert cfg.skip_verify is False
     assert cfg.debug is False
 
@@ -101,3 +101,64 @@ def test_build_result_round_trip_sentinel_skip() -> None:
     result2 = BuildResult.model_validate_json(payload)
     assert result2 == result
     assert result2.skip_reason == "sentinel"
+
+
+def test_build_config_defaults_start_ready_seconds_to_60() -> None:
+    cfg = BuildConfig(installer=Path("/tmp/x"), name="demo", out_dir=Path("out"))
+    assert cfg.start_ready_seconds == 60
+
+
+def test_build_config_verify_soak_defaults_to_none_sentinel() -> None:
+    """Pipeline distinguishes 'user explicitly set 30' from 'user didn't set anything'
+    so the auto-scale can fire only when no override was given."""
+    cfg = BuildConfig(installer=Path("/tmp/x"), name="demo", out_dir=Path("out"))
+    assert cfg.verify_soak_seconds is None
+
+
+def test_effective_verify_soak_returns_30_when_no_start_cmd_and_no_override() -> None:
+    cfg = BuildConfig(installer=Path("/tmp/x"), name="demo", out_dir=Path("out"))
+    assert cfg.effective_verify_soak_seconds == 30
+
+
+def test_effective_verify_soak_uses_explicit_override_when_set() -> None:
+    cfg = BuildConfig(
+        installer=Path("/tmp/x"),
+        name="demo",
+        out_dir=Path("out"),
+        verify_soak_seconds=15,
+    )
+    assert cfg.effective_verify_soak_seconds == 15
+
+
+def test_effective_verify_soak_uses_explicit_override_even_with_start_cmd() -> None:
+    cfg = BuildConfig(
+        installer=Path("/tmp/x"),
+        name="demo",
+        out_dir=Path("out"),
+        start_cmd="/etc/init.d/foo start",
+        start_ready_seconds=120,
+        verify_soak_seconds=10,
+    )
+    assert cfg.effective_verify_soak_seconds == 10
+
+
+def test_effective_verify_soak_autoscales_to_60_with_start_cmd_and_low_ready() -> None:
+    cfg = BuildConfig(
+        installer=Path("/tmp/x"),
+        name="demo",
+        out_dir=Path("out"),
+        start_cmd="/etc/init.d/foo start",
+        start_ready_seconds=30,
+    )
+    assert cfg.effective_verify_soak_seconds == 60
+
+
+def test_effective_verify_soak_autoscales_to_start_ready_when_larger() -> None:
+    cfg = BuildConfig(
+        installer=Path("/tmp/x"),
+        name="demo",
+        out_dir=Path("out"),
+        start_cmd="/etc/init.d/foo start",
+        start_ready_seconds=120,
+    )
+    assert cfg.effective_verify_soak_seconds == 120

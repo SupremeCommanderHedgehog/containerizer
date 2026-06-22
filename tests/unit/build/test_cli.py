@@ -304,3 +304,88 @@ def test_build_cli_plumbs_multi_deb_flags(tmp_path: Path, monkeypatch) -> None:
     assert cfg.extra_installers == (extra.resolve(),)
     assert cfg.apt_sources == ("deb http://y noble main",)
     assert cfg.apt_keys == (key.resolve(),)
+
+
+def test_build_cli_no_longer_warns_about_start_cmd(tmp_path: Path, monkeypatch) -> None:
+    """Issue #105: the 'has no effect' warning must be gone."""
+    from click.testing import CliRunner
+
+    from containerizer.build.cli import build_cmd
+
+    installer = tmp_path / "foo.deb"
+    installer.write_bytes(b"!<arch>\nfake")
+
+    monkeypatch.setattr("containerizer.build.cli.preflight_podman", lambda: None)
+
+    def _boom(*a, **kw):
+        raise SystemExit(0)
+
+    monkeypatch.setattr("containerizer.build.cli.run_pipeline", _boom)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        build_cmd,
+        [str(installer), "--name", "foo", "--start-cmd", "/etc/init.d/foo start"],
+    )
+    output = result.output or ""
+    assert "has no effect" not in output
+
+
+def test_build_cli_start_ready_seconds_without_start_cmd_errors(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.build.cli import build_cmd
+
+    installer = tmp_path / "foo.deb"
+    installer.write_bytes(b"!<arch>\nfake")
+    monkeypatch.setattr("containerizer.build.cli.preflight_podman", lambda: None)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        build_cmd,
+        [str(installer), "--name", "foo", "--start-ready-seconds", "90"],
+    )
+    assert result.exit_code != 0
+    err = result.output or ""
+    assert "--start-ready-seconds requires --start-cmd" in err
+
+
+def test_build_cli_accepts_start_cmd_and_ready_seconds_together(
+    tmp_path: Path, monkeypatch
+) -> None:
+    from click.testing import CliRunner
+
+    from containerizer.build.cli import build_cmd
+
+    installer = tmp_path / "foo.deb"
+    installer.write_bytes(b"!<arch>\nfake")
+    monkeypatch.setattr("containerizer.build.cli.preflight_podman", lambda: None)
+    captured = {}
+
+    def _capture(config, **kw):
+        captured["config"] = config
+        raise SystemExit(0)
+
+    monkeypatch.setattr("containerizer.build.cli.run_pipeline", _capture)
+
+    runner = CliRunner()
+    result = runner.invoke(
+        build_cmd,
+        [
+            str(installer),
+            "--name",
+            "foo",
+            "--start-cmd",
+            "/etc/init.d/foo start",
+            "--start-ready-seconds",
+            "90",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    cfg = captured["config"]
+    assert cfg.start_cmd == "/etc/init.d/foo start"
+    assert cfg.start_ready_seconds == 90
+    assert cfg.verify_soak_seconds is None
+    assert cfg.effective_verify_soak_seconds == 90

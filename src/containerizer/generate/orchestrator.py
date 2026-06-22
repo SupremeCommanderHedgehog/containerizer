@@ -33,6 +33,9 @@ def generate_all(
     install_primary: Path | None = None,
     install_extras: tuple[Path, ...] = (),
     install_apt_sources: tuple[str, ...] = (),
+    install_start_cmd: str | None = None,
+    install_start_ready_seconds: int | None = None,
+    install_verify_soak_seconds: int | None = None,
 ) -> list[int]:
     """Render the M4 artifact set into `out_dir`.
 
@@ -71,6 +74,9 @@ def generate_all(
             install_primary=install_primary,
             install_extras=install_extras,
             install_apt_sources=install_apt_sources,
+            install_start_cmd=install_start_cmd,
+            install_start_ready_seconds=install_start_ready_seconds,
+            install_verify_soak_seconds=install_verify_soak_seconds,
         ),
         encoding="utf-8",
     )
