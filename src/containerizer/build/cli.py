@@ -50,6 +50,13 @@ class PreflightError(RuntimeError):
     help="Daemon-start hint passed to the trace orchestrator.",
 )
 @click.option(
+    "--start-ready-seconds",
+    type=int,
+    default=60,
+    help="Seconds to wait for the daemon to bind a port after --start-cmd "
+    "before proceeding. Only meaningful with --start-cmd.",
+)
+@click.option(
     "-o",
     "--out",
     "out_dir",
@@ -64,8 +71,10 @@ class PreflightError(RuntimeError):
 @click.option(
     "--verify-soak-seconds",
     type=int,
-    default=30,
-    help="Verify-phase idle observation window after daemon-ready.",
+    default=None,
+    help="Verify-phase idle observation window after daemon-ready. "
+    "Defaults to 30s; when --start-cmd is set, auto-scales to "
+    "max(60s, --start-ready-seconds).",
 )
 @click.option(
     "--skip-verify",
@@ -103,9 +112,10 @@ def build_cmd(
     name: str,
     base_image: str | None,
     start_cmd: str | None,
+    start_ready_seconds: int,
     out_dir: Path,
     keep_intermediates: bool,
-    verify_soak_seconds: int,
+    verify_soak_seconds: int | None,
     skip_verify: bool,
     debug: bool,
     extra_installers: tuple[Path, ...],
@@ -115,6 +125,10 @@ def build_cmd(
     """Run the full pipeline: probe -> trace -> analyze -> generate ->
     rebuild -> retrace -> verify into one directory."""
     _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
+
+    if start_cmd is None and start_ready_seconds != 60:
+        raise click.UsageError("--start-ready-seconds requires --start-cmd")
+
     try:
         preflight_podman()
     except PreflightError as exc:
@@ -127,6 +141,7 @@ def build_cmd(
         out_dir=out_dir,
         base_image=base_image,
         start_cmd=start_cmd,
+        start_ready_seconds=start_ready_seconds,
         keep_intermediates=keep_intermediates,
         verify_soak_seconds=verify_soak_seconds,
         skip_verify=skip_verify,
@@ -135,13 +150,6 @@ def build_cmd(
         apt_sources=apt_sources,
         apt_keys=tuple(p.resolve() for p in apt_keys),
     )
-
-    if start_cmd is not None:
-        click.echo(
-            "[warn]     --start-cmd is reserved and currently has no effect; "
-            "the trace orchestrator will use its default daemon detection",
-            err=True,
-        )
 
     # NOTE: --debug is accepted but currently only governs whether the
     # tempdir survives on success. The "drop a shell in the runner" path
@@ -233,12 +241,14 @@ def _default_probe_fn(installer: Path, base_image: str | None) -> ProbeResult:
 
 def _default_install_trace_fn(
     installer: Path,
-    start_cmd: str | None,  # reserved for future orchestrator env wiring
+    start_cmd: str | None,
     output_dir: Path,
     *,
     extra_installers: tuple[Path, ...] = (),
     apt_sources: tuple[str, ...] = (),
     apt_keys: tuple[Path, ...] = (),
+    start_ready_seconds: int = 60,
+    verify_soak_seconds: int = 30,
 ) -> int:
     image = RunnerImage(sandbox_dir=_sandbox_dir())
     if not image.exists():
@@ -253,6 +263,9 @@ def _default_install_trace_fn(
         extra_installers=extra_installers,
         apt_sources=apt_sources,
         apt_keys=apt_keys,
+        start_cmd=start_cmd,
+        start_ready_seconds=start_ready_seconds,
+        verify_soak_seconds=verify_soak_seconds,
     )
     return runner.run()
 
@@ -273,6 +286,9 @@ def _default_generate_fn(
     install_primary: Path | None = None,
     install_extras: tuple[Path, ...] = (),
     install_apt_sources: tuple[str, ...] = (),
+    install_start_cmd: str | None = None,
+    install_start_ready_seconds: int | None = None,
+    install_verify_soak_seconds: int | None = None,
 ) -> None:
     unknown_ids = generate_all(
         policy,
@@ -281,6 +297,9 @@ def _default_generate_fn(
         install_primary=install_primary,
         install_extras=install_extras,
         install_apt_sources=install_apt_sources,
+        install_start_cmd=install_start_cmd,
+        install_start_ready_seconds=install_start_ready_seconds,
+        install_verify_soak_seconds=install_verify_soak_seconds,
     )
     if unknown_ids:
         click.echo(

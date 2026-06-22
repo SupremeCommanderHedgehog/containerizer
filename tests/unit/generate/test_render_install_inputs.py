@@ -48,6 +48,30 @@ def test_install_inputs_returns_empty_string_when_nothing_to_render() -> None:
     assert section == ""
 
 
+def test_install_inputs_section_renders_start_command_when_set() -> None:
+    section = _render_install_inputs(
+        primary=Path("/x/unifi.deb"),
+        extras=(),
+        apt_sources=(),
+        start_cmd="/etc/init.d/mongod start && sleep 10 && /etc/init.d/unifi start",
+        start_ready_seconds=120,
+        verify_soak_seconds=60,
+    )
+    assert "Start command:" in section
+    assert "/etc/init.d/mongod start && sleep 10 && /etc/init.d/unifi start" in section
+    assert "Ready timeout: 120s" in section
+    assert "Verify soak: 60s" in section
+
+
+def test_install_inputs_section_omits_start_command_when_unset() -> None:
+    section = _render_install_inputs(
+        primary=Path("/x/unifi.deb"),
+        extras=(),
+        apt_sources=(),
+    )
+    assert "Start command:" not in section
+
+
 def test_render_readme_includes_install_inputs_when_provided() -> None:
     """Smoke: render_readme wires install_inputs into the assembled README."""
     policy = PolicyJson(

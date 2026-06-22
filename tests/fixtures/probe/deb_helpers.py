@@ -51,6 +51,18 @@ def _make_tar_gz(entries: dict[str, bytes]) -> bytes:
     return buf.getvalue()
 
 
+def _make_tar_gz_with_modes(entries: dict[str, tuple[bytes, int]]) -> bytes:
+    """Build a tar.gz where each entry is (content, mode)."""
+    buf = io.BytesIO()
+    with tarfile.open(fileobj=buf, mode="w:gz") as tf:
+        for path, (content, mode) in entries.items():
+            info = tarfile.TarInfo(name=path)
+            info.size = len(content)
+            info.mode = mode
+            tf.addfile(info, io.BytesIO(content))
+    return buf.getvalue()
+
+
 def build_minimal_deb(
     path: Path,
     *,
@@ -62,8 +74,15 @@ def build_minimal_deb(
     description: str = "test package\n A test package for containerizer.",
     systemd_unit: str | None = "hello.service",
     extra_unit_paths: list[str] | None = None,
+    init_script_body: str | None = None,
+    postinst_body: str | None = None,
 ) -> None:
-    """Write a minimal but valid .deb to *path*."""
+    """Write a minimal but valid .deb to *path*.
+
+    Issue #105: optional init_script_body installs an executable
+    /etc/init.d/<package> with the supplied body. postinst_body adds a
+    DEBIAN/postinst script (rendered into control.tar.gz, executable).
+    """
     control_fields = [
         f"Package: {package}",
         f"Version: {version}",
@@ -73,15 +92,20 @@ def build_minimal_deb(
         f"Description: {description}",
         "",
     ]
-    control_tar = _make_tar_gz({"control": "\n".join(control_fields).encode()})
+    control_entries: dict[str, bytes] = {"control": "\n".join(control_fields).encode()}
+    if postinst_body is not None:
+        control_entries["postinst"] = postinst_body.encode()
+    control_tar = _make_tar_gz_with_modes(
+        {p: (b, 0o755 if p == "postinst" else 0o644) for p, b in control_entries.items()}
+    )
 
     # Issue #102: payload path includes the package name so two fixture debs
     # installed in the same apt transaction don't collide on a shared
     # `/usr/bin/hello` (dpkg refuses to overwrite a file from a different
     # package). Single-deb tests are unaffected because the existing tests
     # assert against the systemd unit name, not the bin path.
-    data_entries: dict[str, bytes] = {
-        f"./usr/bin/{package}": b"#!/bin/sh\necho hello\n",
+    data_entries: dict[str, tuple[bytes, int]] = {
+        f"./usr/bin/{package}": (b"#!/bin/sh\necho hello\n", 0o755),
     }
     if systemd_unit is not None:
         unit_body = (
@@ -89,7 +113,7 @@ def build_minimal_deb(
             "[Service]\nExecStart=/usr/bin/hello\n"
             "[Install]\nWantedBy=multi-user.target\n"
         )
-        data_entries[f"./lib/systemd/system/{systemd_unit}"] = unit_body.encode()
+        data_entries[f"./lib/systemd/system/{systemd_unit}"] = (unit_body.encode(), 0o644)
     if extra_unit_paths:
         extra_body = (
             "[Unit]\nDescription=Extra service\n"
@@ -97,8 +121,10 @@ def build_minimal_deb(
             "[Install]\nWantedBy=multi-user.target\n"
         )
         for ep in extra_unit_paths:
-            data_entries[ep] = extra_body.encode()
-    data_tar = _make_tar_gz(data_entries)
+            data_entries[ep] = (extra_body.encode(), 0o644)
+    if init_script_body is not None:
+        data_entries[f"./etc/init.d/{package}"] = (init_script_body.encode(), 0o755)
+    data_tar = _make_tar_gz_with_modes(data_entries)
 
     buf = io.BytesIO()
     buf.write(b"!<arch>\n")
