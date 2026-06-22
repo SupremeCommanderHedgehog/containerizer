@@ -73,7 +73,8 @@ class TraceRunner:
                 raise ValueError(f"verify mode requires: {', '.join(missing)}")
             if self.extra_installers or self.apt_sources or self.apt_keys or self.start_cmd:
                 raise ValueError(
-                    "verify mode does not accept extra installers, apt sources, apt keys, or start_cmd"
+                    "verify mode does not accept extra installers, apt sources, "
+                    "apt keys, or start_cmd"
                 )
 
     def argv(self) -> list[str]:
@@ -160,7 +161,10 @@ class TraceRunner:
             # Issue #105: runtime-soak window. Always set; orchestrator only sleeps when
             # CONTAINERIZER_START_CMD is also set, so this is a no-op for non-start-cmd runs.
             "-e",
-            f"CONTAINERIZER_VERIFY_SOAK_SECONDS={self.verify_soak_seconds if self.verify_soak_seconds is not None else 30}",
+            (
+                "CONTAINERIZER_VERIFY_SOAK_SECONDS="
+                f"{self.verify_soak_seconds if self.verify_soak_seconds is not None else 30}"
+            ),
             # Issue #102: apt-source lines are transported via a file written by
             # run() to output_dir/apt-sources.list (mounted at
             # /work/trace/apt-sources.list inside the runner). Env-var transport

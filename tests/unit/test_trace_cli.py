@@ -564,7 +564,9 @@ def test_trace_cli_threads_start_cmd_into_runner(tmp_path: Path, monkeypatch) ->
     assert runner_inst["verify_soak_seconds"] == 45
 
 
-def test_trace_cli_start_ready_seconds_without_start_cmd_errors(tmp_path: Path, monkeypatch) -> None:
+def test_trace_cli_start_ready_seconds_without_start_cmd_errors(
+    tmp_path: Path, monkeypatch
+) -> None:
     from click.testing import CliRunner
 
     from containerizer.trace.cli import trace_cmd

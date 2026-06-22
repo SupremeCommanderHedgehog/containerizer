@@ -329,7 +329,9 @@ def test_build_cli_no_longer_warns_about_start_cmd(tmp_path: Path, monkeypatch) 
     assert "has no effect" not in output
 
 
-def test_build_cli_start_ready_seconds_without_start_cmd_errors(tmp_path: Path, monkeypatch) -> None:
+def test_build_cli_start_ready_seconds_without_start_cmd_errors(
+    tmp_path: Path, monkeypatch
+) -> None:
     from click.testing import CliRunner
 
     from containerizer.build.cli import build_cmd
@@ -348,7 +350,9 @@ def test_build_cli_start_ready_seconds_without_start_cmd_errors(tmp_path: Path, 
     assert "--start-ready-seconds requires --start-cmd" in err
 
 
-def test_build_cli_accepts_start_cmd_and_ready_seconds_together(tmp_path: Path, monkeypatch) -> None:
+def test_build_cli_accepts_start_cmd_and_ready_seconds_together(
+    tmp_path: Path, monkeypatch
+) -> None:
     from click.testing import CliRunner
 
     from containerizer.build.cli import build_cmd
