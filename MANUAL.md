@@ -457,6 +457,8 @@ PS> containerizer build .\example-app_sysvinit_all.deb `
 
 **Run.**
 
+PowerShell:
+
 ```pwsh
 PS> containerizer build .\example-app_sysvinit_all.deb `
         --installer .\mongodb-org-server_8.0.26_amd64.deb `
@@ -464,6 +466,18 @@ PS> containerizer build .\example-app_sysvinit_all.deb `
         --start-cmd '/etc/init.d/mongod start && sleep 10 && /etc/init.d/example-app start' `
         --start-ready-seconds 120 `
         --keep-intermediates `
+        --skip-verify
+```
+
+Bash:
+
+```bash
+$ containerizer build ./example-app_sysvinit_all.deb \
+        --installer ./mongodb-org-server_8.0.26_amd64.deb \
+        --name example-app \
+        --start-cmd '/etc/init.d/mongod start && sleep 10 && /etc/init.d/example-app start' \
+        --start-ready-seconds 120 \
+        --keep-intermediates \
         --skip-verify
 ```
 
