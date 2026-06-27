@@ -81,7 +81,12 @@ def derive_policy(
             binds_ro=binds_ro,
             publish_ports=publish_ports,
             caps_add=runtime.caps,
-            seccomp_syscalls=runtime.syscalls,
+            # Union install + runtime syscalls. The collector buckets each
+            # syscall into the phase of its first occurrence, so a syscall the
+            # daemon also uses at runtime is attributed to install if it was
+            # first seen there. Using runtime alone yields an empty allowlist
+            # for most workloads (#116); the union is the complete observed set.
+            seccomp_syscalls=sorted(set(trace.install.syscalls) | set(runtime.syscalls)),
             read_only_rootfs=False,
         ),
         warnings=final_warnings,
