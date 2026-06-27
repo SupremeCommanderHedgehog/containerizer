@@ -40,7 +40,21 @@ def derive_policy(
     ]
 
     systemd_required = systemd_required_for(trace)
-    entrypoint = ["/sbin/init"] if systemd_required else [SENTINEL_ENTRYPOINT]
+    start_cmd = trace.start_cmd or None  # defensive: empty string -> None
+
+    # Copy so callers' list is not mutated when we append a warning below.
+    final_warnings: list[str] = list(warnings or [])
+    if systemd_required:
+        entrypoint = ["/sbin/init"]
+        if start_cmd:
+            final_warnings.append(
+                "start_cmd ignored: systemd detected as required; "
+                "using /sbin/init as entrypoint"
+            )
+    elif start_cmd:
+        entrypoint = ["bash", "-c", start_cmd]
+    else:
+        entrypoint = [SENTINEL_ENTRYPOINT]
 
     return PolicyJson(
         image=PolicyImage(
@@ -60,7 +74,7 @@ def derive_policy(
             seccomp_syscalls=runtime.syscalls,
             read_only_rootfs=False,
         ),
-        warnings=warnings or [],
+        warnings=final_warnings,
     )
 
 

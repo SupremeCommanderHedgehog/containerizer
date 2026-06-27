@@ -27,6 +27,7 @@ def _make_trace(
     runtime: TracePhase = EMPTY_PHASE,
     marker: str = "COMPLETE",
     warnings: list[str] | None = None,
+    start_cmd: str | None = None,
 ) -> TraceJson:
     return TraceJson(
         phase_marker_ns=100 if marker == "COMPLETE" else None,
@@ -34,6 +35,7 @@ def _make_trace(
         install=install,
         runtime=runtime,
         warnings=warnings or [],
+        start_cmd=start_cmd,
     )
 
 
@@ -209,3 +211,43 @@ def test_derive_policy_warnings_defaults_to_empty() -> None:
     trace = _make_trace()
     policy = derive_policy(trace)
     assert policy.warnings == []
+
+
+def test_entrypoint_uses_start_cmd_when_no_systemd() -> None:
+    runtime = TracePhase(
+        duration_s=1.0,
+        paths=[],
+        ports=[],
+        outbound=[],
+        caps=[],
+        syscalls=[],
+        execs=["java"],  # no systemd in execs
+    )
+    policy = derive_policy(
+        _make_trace(runtime=runtime, start_cmd="/etc/init.d/unifi start"),
+    )
+    assert policy.image.systemd_required is False
+    assert policy.image.entrypoint == ["bash", "-c", "/etc/init.d/unifi start"]
+    # No "start_cmd ignored" warning when systemd is not required.
+    assert not any("start_cmd ignored" in w for w in policy.warnings)
+
+
+def test_entrypoint_ignores_start_cmd_when_systemd_with_warning() -> None:
+    runtime = TracePhase(
+        duration_s=1.0,
+        paths=[],
+        ports=[],
+        outbound=[],
+        caps=[],
+        syscalls=[],
+        execs=["systemd", "java"],  # systemd in execs triggers systemd_required
+    )
+    policy = derive_policy(
+        _make_trace(runtime=runtime, start_cmd="/etc/init.d/unifi start"),
+    )
+    assert policy.image.systemd_required is True
+    assert policy.image.entrypoint == ["/sbin/init"]
+    assert (
+        "start_cmd ignored: systemd detected as required; using /sbin/init as entrypoint"
+        in policy.warnings
+    )
