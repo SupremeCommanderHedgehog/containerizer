@@ -132,6 +132,8 @@ def trace_cmd(
     verify_soak_seconds: int | None,
 ) -> None:
     """Run INSTALLER inside the trace sandbox and capture observations."""
+    if start_cmd == "":
+        start_cmd = None
     _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
     if start_cmd is None and start_ready_seconds != 60:
         raise click.UsageError("--start-ready-seconds requires --start-cmd")

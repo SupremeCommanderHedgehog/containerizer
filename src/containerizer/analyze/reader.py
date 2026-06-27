@@ -42,6 +42,7 @@ class TraceBundle:
     # events[collector_name] = list of parsed JSON dicts (one per .jsonl line)
     events: dict[str, list[dict[str, object]]]
     warnings: list[str] = field(default_factory=list)
+    start_cmd: str | None = None
 
 
 def read_trace_dir(trace_dir: Path) -> TraceBundle:
@@ -94,12 +95,17 @@ def read_trace_dir(trace_dir: Path) -> TraceBundle:
         for name in empty_present:
             warnings.append(f"collector {name}: .jsonl present but empty")
 
+    # START_CMD is optional: absent for traces taken without --start-cmd. Read
+    # verbatim per spec §3.1; CLI normalization (Task 6) prevents empty strings.
+    start_cmd_path = trace_dir / "START_CMD"
+    start_cmd = start_cmd_path.read_text(encoding="utf-8") if start_cmd_path.exists() else None
     return TraceBundle(
         marker=marker,
         phase_marker_ns=phase_marker_ns,
         fallbacks=fallbacks,
         events=events,
         warnings=warnings,
+        start_cmd=start_cmd,
     )
 
 
