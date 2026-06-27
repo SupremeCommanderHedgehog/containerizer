@@ -1,9 +1,14 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "image": {
     "base": "ubuntu:24.04",
+    "installer": {
+      "kind": "executable",
+      "path": "/installer"
+    },
+    "apt_sources": [],
+    "apt_keys": [],
     "apt_packages": [],
-    "installer_path": "/installer",
     "post_install_cleanup": [
       "/var/cache/apt/archives/*",
       "/installer"

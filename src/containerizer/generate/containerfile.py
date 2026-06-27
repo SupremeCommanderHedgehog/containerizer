@@ -39,9 +39,10 @@ def _render_executable(policy: PolicyJson) -> str:
 
 
 def _render_deb(policy: PolicyJson) -> str:
-    assert isinstance(policy.image.installer, DebInstaller)  # for type narrowing
     image = policy.image
-    deb_paths = image.installer.paths
+    installer = image.installer
+    assert isinstance(installer, DebInstaller)  # for type narrowing
+    deb_paths = installer.paths
 
     lines: list[str] = [
         f"FROM {image.base}",
