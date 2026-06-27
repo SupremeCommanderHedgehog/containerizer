@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 from containerizer.analyze.derive import derive_policy
+from containerizer.analyze.reader import InstallInputs
 from containerizer.analyze.schema import (
+    DebInstaller,
+    ExecutableInstaller,
     TraceJson,
     TracePath,
     TracePhase,
@@ -72,8 +75,11 @@ def test_systemd_heuristic_false_emits_sentinel_entrypoint() -> None:
 def test_conservative_defaults_in_minimal_trace() -> None:
     policy = derive_policy(_make_trace())
     assert policy.image.apt_packages == []
-    assert policy.image.installer_path == "/installer"
+    assert isinstance(policy.image.installer, ExecutableInstaller)
+    assert policy.image.installer.path == "/installer"
     assert policy.image.post_install_cleanup == ["/var/cache/apt/archives/*", "/installer"]
+    assert policy.image.apt_sources == []
+    assert policy.image.apt_keys == []
     assert policy.runtime.read_only_rootfs is False
     assert policy.runtime.no_new_privileges is True
     assert policy.runtime.caps_drop == ["ALL"]
@@ -251,3 +257,66 @@ def test_entrypoint_ignores_start_cmd_when_systemd_with_warning() -> None:
         "start_cmd ignored: systemd detected as required; using /sbin/init as entrypoint"
         in policy.warnings
     )
+
+
+def test_derive_installer_deb_single() -> None:
+    inputs = InstallInputs(installers=("foo.deb",))
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert isinstance(policy.image.installer, DebInstaller)
+    assert policy.image.installer.paths == ["/tmp/foo.deb"]
+
+
+def test_derive_installer_deb_multi() -> None:
+    inputs = InstallInputs(
+        installers=("primary.deb", "extra1.deb", "extra2.deb"),
+    )
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert isinstance(policy.image.installer, DebInstaller)
+    assert policy.image.installer.paths == [
+        "/tmp/primary.deb",
+        "/tmp/extra1.deb",
+        "/tmp/extra2.deb",
+    ]
+
+
+def test_derive_installer_executable_when_primary_not_deb() -> None:
+    inputs = InstallInputs(installers=("unifi-installer.bin",))
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert isinstance(policy.image.installer, ExecutableInstaller)
+    assert policy.image.installer.path == "/installer"
+
+
+def test_derive_apt_sources_propagated() -> None:
+    inputs = InstallInputs(
+        installers=("foo.deb",),
+        apt_sources=("deb http://example/x noble main",),
+    )
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert policy.image.apt_sources == ["deb http://example/x noble main"]
+
+
+def test_derive_apt_keys_propagated_as_basenames() -> None:
+    inputs = InstallInputs(
+        installers=("foo.deb",),
+        apt_keys=("mongodb.gpg", "extra.asc"),
+    )
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert policy.image.apt_keys == ["mongodb.gpg", "extra.asc"]
+
+
+def test_derive_post_install_cleanup_for_deb() -> None:
+    inputs = InstallInputs(installers=("foo.deb",))
+    policy = derive_policy(_make_trace(), install_inputs=inputs)
+    assert policy.image.post_install_cleanup == [
+        "/tmp/*.deb",
+        "/var/lib/apt/lists/*",
+        "/var/cache/apt/archives/*",
+    ]
+
+
+def test_derive_no_install_inputs_falls_back_to_executable() -> None:
+    """Backwards-compatible: derive_policy() with no install_inputs
+    behaves as today (sentinel single-executable shape)."""
+    policy = derive_policy(_make_trace())
+    assert isinstance(policy.image.installer, ExecutableInstaller)
+    assert policy.image.installer.path == "/installer"

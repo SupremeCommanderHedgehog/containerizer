@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyRuntime,
@@ -77,6 +78,7 @@ def test_render_readme_includes_install_inputs_when_provided() -> None:
     policy = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=False,

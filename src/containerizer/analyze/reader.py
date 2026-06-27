@@ -109,6 +109,36 @@ def read_trace_dir(trace_dir: Path) -> TraceBundle:
     )
 
 
+@dataclass(frozen=True)
+class InstallInputs:
+    """User-supplied install-time inputs surfaced from trace-dir marker files."""
+
+    installers: tuple[str, ...] = ()
+    apt_sources: tuple[str, ...] = ()
+    apt_keys: tuple[str, ...] = ()
+
+
+def read_install_inputs(trace_dir: Path) -> InstallInputs:
+    """Read INSTALLERS / apt-sources.list / APT_KEYS marker files.
+
+    All three files are optional; missing files yield empty tuples.
+    Blank lines are skipped.
+    """
+    return InstallInputs(
+        installers=_read_lines(trace_dir / "INSTALLERS"),
+        apt_sources=_read_lines(trace_dir / "apt-sources.list"),
+        apt_keys=_read_lines(trace_dir / "APT_KEYS"),
+    )
+
+
+def _read_lines(path: Path) -> tuple[str, ...]:
+    if not path.exists():
+        return ()
+    return tuple(
+        line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
+    )
+
+
 def _read_phase_marker(path: Path) -> int | None:
     if not path.exists():
         return None

@@ -8,11 +8,13 @@ build/cli.py does that around it.
 
 from __future__ import annotations
 
+import shutil
 from collections.abc import Callable
 from pathlib import Path
 from typing import Literal, TextIO
 
 from containerizer.analyze.derive import SENTINEL_ENTRYPOINT
+from containerizer.analyze.reader import InstallInputs, read_install_inputs
 from containerizer.analyze.schema import PolicyJson, TraceJson
 from containerizer.analyze.writer import write_policy_json, write_trace_json
 from containerizer.build.config import BuildConfig, BuildResult
@@ -34,7 +36,7 @@ def run_pipeline(
     probe_fn: Callable[[Path, str | None], ProbeResult],
     install_trace_fn: Callable[..., int],
     parse_trace_fn: Callable[[Path], TraceJson],
-    derive_policy_fn: Callable[[TraceJson], PolicyJson],
+    derive_policy_fn: Callable[[TraceJson, InstallInputs], PolicyJson],
     generate_fn: Callable[..., None],
     podman_build_fn: Callable[[Path, str], Path],
     verify_trace_fn: Callable[[Path, list[str], str, int, Path], int],
@@ -75,7 +77,8 @@ def run_pipeline(
     layout.analyze_trace_json.parent.mkdir(parents=True, exist_ok=True)
     write_trace_json(original_trace, layout.analyze_trace_json)
 
-    policy = derive_policy_fn(original_trace)
+    install_inputs = read_install_inputs(layout.trace_original_dir)
+    policy = derive_policy_fn(original_trace, install_inputs)
     write_policy_json(policy, layout.analyze_policy_json)
 
     # 4. generate
@@ -93,6 +96,14 @@ def run_pipeline(
         install_verify_soak_seconds=(
             config.effective_verify_soak_seconds if config.start_cmd else None
         ),
+    )
+
+    # Stage install inputs into final_dir so podman build can resolve COPY lines.
+    _stage_install_inputs(
+        final_dir=layout.final_dir,
+        installer=config.installer,
+        extra_installers=config.extra_installers,
+        apt_keys=config.apt_keys,
     )
 
     # 4a. sentinel
@@ -177,6 +188,36 @@ def run_pipeline(
         skip_reason=None,
         warnings=warnings,
     )
+
+
+def _stage_install_inputs(
+    *,
+    final_dir: Path,
+    installer: Path,
+    extra_installers: tuple[Path, ...],
+    apt_keys: tuple[Path, ...],
+) -> None:
+    """Copy installer files and apt-keys into final_dir so the Containerfile's
+    COPY lines resolve during podman build.
+
+    Deb / multi-deb path: installers/<name>.deb + apt-keys/<name>.
+    Executable path: installer (bare file, matches COPY ./installer).
+    """
+    final_dir.mkdir(parents=True, exist_ok=True)
+    if installer.suffix == ".deb" or extra_installers:
+        installers_dir = final_dir / "installers"
+        installers_dir.mkdir(exist_ok=True)
+        shutil.copy2(installer, installers_dir / installer.name)
+        for extra in extra_installers:
+            shutil.copy2(extra, installers_dir / extra.name)
+    else:
+        shutil.copy2(installer, final_dir / "installer")
+
+    if apt_keys:
+        keys_dir = final_dir / "apt-keys"
+        keys_dir.mkdir(exist_ok=True)
+        for key in apt_keys:
+            shutil.copy2(key, keys_dir / key.name)
 
 
 def _say(stderr: TextIO, msg: str) -> None:
