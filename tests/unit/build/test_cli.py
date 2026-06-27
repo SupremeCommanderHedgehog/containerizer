@@ -398,19 +398,24 @@ def test_empty_start_cmd_normalized_to_none(tmp_path: Path) -> None:
     out_dir = tmp_path / "out"
 
     runner = CliRunner()
-    with patch.object(
-        build_cli_module, "preflight_podman"
-    ), patch.object(
-        build_cli_module, "run_pipeline",
-        return_value=_ok_result(out_dir / "demo"),
-    ) as mock_pipeline:
+    with (
+        patch.object(build_cli_module, "preflight_podman"),
+        patch.object(
+            build_cli_module,
+            "run_pipeline",
+            return_value=_ok_result(out_dir / "demo"),
+        ) as mock_pipeline,
+    ):
         result = runner.invoke(
             build_cmd,
             [
                 str(installer),
-                "--name", "demo",
-                "-o", str(out_dir),
-                "--start-cmd", "",
+                "--name",
+                "demo",
+                "-o",
+                str(out_dir),
+                "--start-cmd",
+                "",
             ],
         )
 

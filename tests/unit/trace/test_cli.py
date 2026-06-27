@@ -17,14 +17,11 @@ def test_empty_start_cmd_normalized_to_none(tmp_path: Path) -> None:
     installer.write_text("x", encoding="utf-8")
     out_dir = tmp_path / "out"
 
-    with patch.object(
-        trace_cli_module, "_podman_machine_is_running", return_value=True
-    ), patch.object(
-        trace_cli_module, "RunnerImage"
-    ) as mock_image, patch.object(
-        trace_cli_module, "TraceRunner"
-    ) as mock_runner_cls, patch.object(
-        trace_cli_module, "_print_summary"
+    with (
+        patch.object(trace_cli_module, "_podman_machine_is_running", return_value=True),
+        patch.object(trace_cli_module, "RunnerImage") as mock_image,
+        patch.object(trace_cli_module, "TraceRunner") as mock_runner_cls,
+        patch.object(trace_cli_module, "_print_summary"),
     ):
         mock_image.return_value.exists.return_value = True
         mock_image.return_value.tag = "test:latest"

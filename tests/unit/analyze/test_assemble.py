@@ -26,10 +26,7 @@ def test_assemble_propagates_start_cmd_from_bundle() -> None:
         marker="COMPLETE",
         phase_marker_ns=100,
         fallbacks={},
-        events={
-            name: []
-            for name in ("open", "bind", "syscalls", "connect", "accept", "capable")
-        },
+        events={name: [] for name in ("open", "bind", "syscalls", "connect", "accept", "capable")},
         warnings=[],
         start_cmd="/etc/init.d/mongod start",
     )

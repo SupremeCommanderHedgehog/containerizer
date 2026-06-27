@@ -21,9 +21,7 @@ def test_runner_writes_start_cmd_file_when_set(tmp_path: Path) -> None:
     installer.write_text("x", encoding="utf-8")
     output_dir = tmp_path / "out"
     output_dir.mkdir()
-    runner = _install_runner(
-        output_dir, installer, start_cmd="/etc/init.d/unifi start"
-    )
+    runner = _install_runner(output_dir, installer, start_cmd="/etc/init.d/unifi start")
 
     runner._materialize_start_cmd_file()
 

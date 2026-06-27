@@ -48,8 +48,7 @@ def derive_policy(
         entrypoint = ["/sbin/init"]
         if start_cmd:
             final_warnings.append(
-                "start_cmd ignored: systemd detected as required; "
-                "using /sbin/init as entrypoint"
+                "start_cmd ignored: systemd detected as required; using /sbin/init as entrypoint"
             )
     elif start_cmd:
         entrypoint = ["bash", "-c", start_cmd]

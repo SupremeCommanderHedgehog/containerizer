@@ -246,7 +246,7 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
         policy_data = json.loads(policy_path.read_text(encoding="utf-8"))
         entrypoint = policy_data.get("image", {}).get("entrypoint")
         assert entrypoint == ["bash", "-c", start_cmd_string], (
-            f"expected entrypoint [\"bash\", \"-c\", {start_cmd_string!r}], "
+            f'expected entrypoint ["bash", "-c", {start_cmd_string!r}], '
             f"got {entrypoint!r}\n"
             f"full policy.json:\n{json.dumps(policy_data, indent=2)}"
         )
