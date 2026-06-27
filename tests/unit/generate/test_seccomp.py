@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyRuntime,
@@ -16,6 +17,7 @@ def _policy(syscalls: list[int]) -> PolicyJson:
     return PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=False,

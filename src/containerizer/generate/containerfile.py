@@ -89,7 +89,5 @@ def _render_deb(policy: PolicyJson) -> str:
 
 
 def _entrypoint_line(policy: PolicyJson) -> str:
-    entrypoint = (
-        ["/sbin/init"] if policy.image.systemd_required else list(policy.image.entrypoint)
-    )
+    entrypoint = ["/sbin/init"] if policy.image.systemd_required else list(policy.image.entrypoint)
     return f"ENTRYPOINT {json.dumps(entrypoint)}"

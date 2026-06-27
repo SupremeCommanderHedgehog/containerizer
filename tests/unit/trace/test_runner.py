@@ -58,7 +58,7 @@ def test_run_materializes_installers_file(tmp_path: Path, monkeypatch) -> None:
         extra_installers=(extra,),
     )
 
-    def _no_op(argv, check=False):  # noqa: ARG001
+    def _no_op(argv, check=False):
         class _R:
             returncode = 0
 
@@ -86,7 +86,7 @@ def test_run_materializes_apt_keys_file(tmp_path: Path, monkeypatch) -> None:
         apt_keys=(key,),
     )
 
-    def _no_op(argv, check=False):  # noqa: ARG001
+    def _no_op(argv, check=False):
         class _R:
             returncode = 0
 
@@ -110,7 +110,7 @@ def test_run_does_not_write_apt_keys_file_when_none(tmp_path: Path, monkeypatch)
         output_dir=out,
     )
 
-    def _no_op(argv, check=False):  # noqa: ARG001
+    def _no_op(argv, check=False):
         class _R:
             returncode = 0
 

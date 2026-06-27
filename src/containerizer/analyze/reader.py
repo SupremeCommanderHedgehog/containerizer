@@ -135,9 +135,7 @@ def _read_lines(path: Path) -> tuple[str, ...]:
     if not path.exists():
         return ()
     return tuple(
-        line.strip()
-        for line in path.read_text(encoding="utf-8").splitlines()
-        if line.strip()
+        line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip()
     )
 
 
