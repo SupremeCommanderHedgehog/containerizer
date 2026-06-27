@@ -73,6 +73,7 @@ def assemble_trace_json(bundle: TraceBundle) -> TraceJson:
         install=install,
         runtime=runtime,
         warnings=warnings,
+        start_cmd=bundle.start_cmd,
     )
     if not systemd_required_for(provisional):
         warnings.append(SENTINEL_WARNING)

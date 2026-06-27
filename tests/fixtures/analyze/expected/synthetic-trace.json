@@ -87,5 +87,6 @@
     "collector connect: .jsonl present but empty",
     "collector accept: .jsonl present but empty",
     "entrypoint is sentinel ['__UNSET__']; M4 must refuse this policy"
-  ]
+  ],
+  "start_cmd": null
 }

@@ -124,6 +124,8 @@ def build_cmd(
 ) -> None:
     """Run the full pipeline: probe -> trace -> analyze -> generate ->
     rebuild -> retrace -> verify into one directory."""
+    if start_cmd == "":
+        start_cmd = None
     _validate_multi_deb_flags(extra_installers, apt_sources, apt_keys)
 
     if start_cmd is None and start_ready_seconds != 60:

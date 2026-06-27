@@ -483,6 +483,8 @@ $ containerizer build ./unifi_sysvinit_all.deb \
 
 `--start-ready-seconds 120` is the floor for the JVM warmup + UniFi schema migration (30–90 s observed). With `--start-cmd` set and no explicit `--verify-soak-seconds`, the install-phase runtime soak auto-scales to `max(60s, --start-ready-seconds)` — here, 120 s — so the analyzer sees real steady-state daemon activity rather than just startup.
 
+When `--start-cmd` is provided and the workload is not systemd-managed, the same string also becomes the image entrypoint (`bash -c '<start_cmd>'`). For systemd workloads, the entrypoint stays `/sbin/init` and the supplied `--start-cmd` is recorded as a no-op in `policy.warnings`.
+
 **Acceptance.**
 
 - Build exits 0.

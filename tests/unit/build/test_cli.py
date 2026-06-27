@@ -389,3 +389,37 @@ def test_build_cli_accepts_start_cmd_and_ready_seconds_together(
     assert cfg.start_ready_seconds == 90
     assert cfg.verify_soak_seconds is None
     assert cfg.effective_verify_soak_seconds == 90
+
+
+def test_empty_start_cmd_normalized_to_none(tmp_path: Path) -> None:
+    """`build --start-cmd ''` is treated as if --start-cmd wasn't passed at all."""
+    installer = tmp_path / "i.bin"
+    installer.write_text("x", encoding="utf-8")
+    out_dir = tmp_path / "out"
+
+    runner = CliRunner()
+    with (
+        patch.object(build_cli_module, "preflight_podman"),
+        patch.object(
+            build_cli_module,
+            "run_pipeline",
+            return_value=_ok_result(out_dir / "demo"),
+        ) as mock_pipeline,
+    ):
+        result = runner.invoke(
+            build_cmd,
+            [
+                str(installer),
+                "--name",
+                "demo",
+                "-o",
+                str(out_dir),
+                "--start-cmd",
+                "",
+            ],
+        )
+
+    assert result.exit_code == 0, result.output
+    # First positional arg to run_pipeline is the BuildConfig.
+    config = mock_pipeline.call_args.args[0]
+    assert config.start_cmd is None
