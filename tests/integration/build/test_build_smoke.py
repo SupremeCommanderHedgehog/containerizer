@@ -24,7 +24,7 @@ from pathlib import Path
 
 from containerizer.analyze.assemble import assemble_trace_json
 from containerizer.analyze.derive import derive_policy
-from containerizer.analyze.reader import read_trace_dir
+from containerizer.analyze.reader import InstallInputs, read_trace_dir
 from containerizer.analyze.schema import PolicyJson, TraceJson
 from containerizer.build.config import BuildConfig
 from containerizer.build.paths import resolve_layout
@@ -136,8 +136,8 @@ def _real_parse_trace(trace_dir: Path) -> TraceJson:
     return assemble_trace_json(read_trace_dir(trace_dir))
 
 
-def _real_derive_policy(trace: TraceJson) -> PolicyJson:
-    return derive_policy(trace, warnings=list(trace.warnings))
+def _real_derive_policy(trace: TraceJson, install_inputs: InstallInputs) -> PolicyJson:
+    return derive_policy(trace, install_inputs=install_inputs, warnings=list(trace.warnings))
 
 
 def _real_generate(
