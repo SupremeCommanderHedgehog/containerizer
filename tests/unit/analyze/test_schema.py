@@ -167,3 +167,33 @@ def test_policy_json_warnings_defaults_to_empty_list() -> None:
         ),
     )
     assert policy.warnings == []
+
+
+def test_tracejson_round_trips_start_cmd_when_set() -> None:
+    tj = TraceJson(
+        phase_marker_ns=123,
+        marker="COMPLETE",
+        install=_empty_phase(),
+        runtime=_empty_phase(),
+        warnings=[],
+        start_cmd="/etc/init.d/mongod start && /etc/init.d/unifi start",
+    )
+    s = tj.model_dump_json(by_alias=True)
+    tj2 = TraceJson.model_validate_json(s)
+    assert tj2 == tj
+    assert tj2.start_cmd == "/etc/init.d/mongod start && /etc/init.d/unifi start"
+
+
+def test_tracejson_start_cmd_defaults_to_none_for_backwards_compat() -> None:
+    # Old v1 trace.json had no start_cmd field -- parsing must still succeed
+    # with start_cmd resolved to None via the Pydantic default.
+    payload = {
+        "schema_version": 1,
+        "phase_marker_ns": 123,
+        "marker": "COMPLETE",
+        "install": _empty_phase().model_dump(),
+        "runtime": _empty_phase().model_dump(),
+        "warnings": [],
+    }
+    tj = TraceJson.model_validate(payload)
+    assert tj.start_cmd is None
