@@ -237,6 +237,7 @@ class TraceRunner:
     def run(self) -> int:
         """Exec the podman command in the foreground."""
         self._materialize_apt_sources_file()
+        self._materialize_start_cmd_file()
         result = subprocess.run(self.argv(), check=False)
         return result.returncode
 
@@ -249,3 +250,13 @@ class TraceRunner:
         target = self.output_dir / "apt-sources.list"
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text("\n".join(self.apt_sources) + "\n", encoding="utf-8")
+
+    def _materialize_start_cmd_file(self) -> None:
+        """Write start_cmd to output_dir / 'START_CMD' so the analyzer can
+        read it later and emit it as the image entrypoint. Issue #110.
+        No-op when start_cmd is None."""
+        if not self.start_cmd:
+            return
+        target = self.output_dir / "START_CMD"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(self.start_cmd, encoding="utf-8")

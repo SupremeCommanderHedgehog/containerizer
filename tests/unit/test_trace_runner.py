@@ -492,3 +492,46 @@ def test_install_argv_always_includes_verify_soak_env(tmp_path: Path) -> None:
     )
     argv = runner.argv()
     assert "CONTAINERIZER_VERIFY_SOAK_SECONDS=45" in argv
+
+
+def test_run_writes_start_cmd_to_output_dir(tmp_path, monkeypatch) -> None:
+    """Issue #110: run() materializes START_CMD before exec when start_cmd set."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+        start_cmd="/etc/init.d/example-app start",
+    )
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    rc = runner.run()
+
+    assert rc == 0
+    assert (out / "START_CMD").read_text(encoding="utf-8") == "/etc/init.d/example-app start"
+
+
+def test_run_omits_start_cmd_when_unset(tmp_path, monkeypatch) -> None:
+    """Issue #110: run() does not create START_CMD when start_cmd is None."""
+    installer = tmp_path / "primary.deb"
+    installer.write_bytes(b"!<arch>\n")
+    out = tmp_path / "out"
+    out.mkdir()
+
+    runner = TraceRunner(
+        image_tag="runner",
+        installer=installer,
+        output_dir=out,
+        mode="install",
+    )
+
+    monkeypatch.setattr("subprocess.run", lambda *a, **kw: type("R", (), {"returncode": 0})())
+    rc = runner.run()
+
+    assert rc == 0
+    assert not (out / "START_CMD").exists()

@@ -75,6 +75,7 @@ class TraceJson(BaseModel):
     install: TracePhase
     runtime: TracePhase
     warnings: list[str]
+    start_cmd: str | None = None
 
 
 class PolicyImage(BaseModel):

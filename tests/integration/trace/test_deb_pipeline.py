@@ -6,6 +6,7 @@ the workflow's failure-artifact step.
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -152,7 +153,12 @@ def test_multi_deb_install_satisfies_dep(tmp_path: Path) -> None:
 @pytest.mark.integration
 def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None:
     """Issue #105: --start-cmd fires a daemon, ready-poll observes LISTEN, soak
-    captures runtime activity, analyzer derives a non-sentinel policy."""
+    captures runtime activity, analyzer derives a non-sentinel policy.
+
+    Issue #110: entrypoint inference assertion added — when start_cmd is provided
+    and systemd is not required, derive must emit ['bash', '-c', start_cmd] as
+    the image entrypoint.
+    """
     deb = tmp_path / "foo_1.0_amd64.deb"
     build_minimal_deb(
         deb,
@@ -172,6 +178,11 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
     out = tmp_path / "trace"
     out.mkdir()
 
+    # Issue #110: derive lifts start_cmd into the image entrypoint when
+    # systemd is not required. Use a named local so the assertion below can
+    # reference the same string without duplicating the literal.
+    start_cmd_string = "/etc/init.d/foo start"
+
     try:
         result = subprocess.run(
             [
@@ -181,7 +192,7 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
                 "-o",
                 str(out),
                 "--start-cmd",
-                "/etc/init.d/foo start",
+                start_cmd_string,
                 "--start-ready-seconds",
                 "30",
                 "--verify-soak-seconds",
@@ -210,6 +221,35 @@ def test_deb_with_start_cmd_produces_non_sentinel_policy(tmp_path: Path) -> None
         assert (out / "start.exitcode").read_text().strip() == "0"
         bind = (out / "bind.jsonl").read_text(errors="replace")
         assert "9999" in bind, f"port 9999 not seen in bind.jsonl; head:\n{bind[:500]}"
+
+        # Issue #110: derive now lifts start_cmd into the image entrypoint when
+        # systemd is not required. Run analyze on the trace dir and assert the
+        # exact bash -c shape rather than "anything non-sentinel".
+        analyze_out = tmp_path / "analyze"
+        analyze_out.mkdir()
+        analyze_result = subprocess.run(
+            ["containerizer", "analyze", str(out), "-o", str(analyze_out)],
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
+        assert analyze_result.returncode == 0, (
+            f"containerizer analyze exited {analyze_result.returncode}\n"
+            f"stdout:\n{analyze_result.stdout}\nstderr:\n{analyze_result.stderr}"
+        )
+        policy_path = analyze_out / "policy.json"
+        assert policy_path.exists(), (
+            f"containerizer analyze did not write policy.json. "
+            f"analyze stdout:\n{analyze_result.stdout}\nstderr:\n{analyze_result.stderr}"
+        )
+        policy_data = json.loads(policy_path.read_text(encoding="utf-8"))
+        entrypoint = policy_data.get("image", {}).get("entrypoint")
+        assert entrypoint == ["bash", "-c", start_cmd_string], (
+            f'expected entrypoint ["bash", "-c", {start_cmd_string!r}], '
+            f"got {entrypoint!r}\n"
+            f"full policy.json:\n{json.dumps(policy_data, indent=2)}"
+        )
     except AssertionError:
         _dump_trace_dir(out, reason="start-cmd integration assertion failure")
         raise
