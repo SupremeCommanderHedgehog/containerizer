@@ -20,7 +20,12 @@ ExecStartPre=/usr/bin/mkdir -p /run/containerizer
 # systemd's unit-file escape pass leaves "\0" and "\n" intact for sh,
 # instead of warning "Ignoring unknown escape sequences" and substituting
 # a literal newline into the command line.
-ExecStart=/usr/bin/sh -c 'tr "\\0" "\\n" < /proc/1/environ | grep -E "^CONTAINERIZER_" > /run/containerizer/env'
+#
+# The filter must match every var the orchestrator consumes: install mode
+# uses CONTAINERIZER_*; verify mode uses VERIFY_* (VERIFY_IMAGE_TAG,
+# VERIFY_SOAK_SECONDS, VERIFY_RUN_FLAGS). Dropping VERIFY_* makes
+# verify-orchestrator.sh abort with "VERIFY_IMAGE_TAG: required" (#114).
+ExecStart=/usr/bin/sh -c 'tr "\\0" "\\n" < /proc/1/environ | grep -E "^(CONTAINERIZER_|VERIFY_)" > /run/containerizer/env'
 
 [Install]
 WantedBy=multi-user.target
