@@ -238,8 +238,31 @@ class TraceRunner:
         """Exec the podman command in the foreground."""
         self._materialize_apt_sources_file()
         self._materialize_start_cmd_file()
+        self._materialize_installers_file()
+        self._materialize_apt_keys_file()
         result = subprocess.run(self.argv(), check=False)
         return result.returncode
+
+    def _materialize_installers_file(self) -> None:
+        """Write INSTALLERS marker (one basename per line, primary first).
+        Install mode only; verify mode has installer=None."""
+        if self.installer is None:
+            return
+        target = self.output_dir / "INSTALLERS"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        lines = [self.installer.name] + [p.name for p in self.extra_installers]
+        target.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    def _materialize_apt_keys_file(self) -> None:
+        """Write APT_KEYS marker (one basename per line). No-op when empty."""
+        if not self.apt_keys:
+            return
+        target = self.output_dir / "APT_KEYS"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(
+            "\n".join(k.name for k in self.apt_keys) + "\n",
+            encoding="utf-8",
+        )
 
     def _materialize_apt_sources_file(self) -> None:
         """Write apt_sources to output_dir / 'apt-sources.list' so the

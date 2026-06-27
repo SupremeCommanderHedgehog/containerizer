@@ -7,7 +7,7 @@ everything imports from here.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -78,12 +78,34 @@ class TraceJson(BaseModel):
     start_cmd: str | None = None
 
 
+class DebInstaller(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["deb"] = "deb"
+    paths: list[str]
+
+
+class ExecutableInstaller(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    kind: Literal["executable"] = "executable"
+    path: str = "/installer"
+
+
+InstallerSpec = Annotated[
+    DebInstaller | ExecutableInstaller,
+    Field(discriminator="kind"),
+]
+
+
 class PolicyImage(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     base: str
-    apt_packages: list[str]
-    installer_path: str = "/installer"
+    installer: InstallerSpec
+    apt_sources: list[str] = []
+    apt_keys: list[str] = []
+    apt_packages: list[str] = []
     post_install_cleanup: list[str]
     systemd_required: bool
     entrypoint: list[str]
@@ -121,7 +143,7 @@ class PolicyRuntime(BaseModel):
 class PolicyJson(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    schema_version: Literal[2] = 2
+    schema_version: Literal[3] = 3
     image: PolicyImage
     runtime: PolicyRuntime
     warnings: list[str] = []

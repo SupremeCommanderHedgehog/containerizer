@@ -8,6 +8,8 @@ import pytest
 from pydantic import ValidationError
 
 from containerizer.analyze.schema import (
+    DebInstaller,
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyPort,
@@ -74,6 +76,7 @@ def test_policyjson_defaults_and_round_trip() -> None:
     pj = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=["/installer"],
             systemd_required=False,
@@ -92,8 +95,9 @@ def test_policyjson_defaults_and_round_trip() -> None:
     s = pj.model_dump_json(by_alias=True)
     pj2 = PolicyJson.model_validate_json(s)
     assert pj2 == pj
-    assert pj2.schema_version == 2
-    assert pj2.image.installer_path == "/installer"
+    assert pj2.schema_version == 3
+    assert isinstance(pj2.image.installer, ExecutableInstaller)
+    assert pj2.image.installer.path == "/installer"
     assert pj2.runtime.caps_drop == ["ALL"]
     assert pj2.runtime.no_new_privileges is True
 
@@ -123,10 +127,11 @@ def test_traceoutbound_basic() -> None:
     assert ob.dport == 443
 
 
-def test_policy_json_v2_has_warnings_field() -> None:
+def test_policy_json_v3_has_warnings_field() -> None:
     policy = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=False,
@@ -143,7 +148,7 @@ def test_policy_json_v2_has_warnings_field() -> None:
         ),
         warnings=["unknown_rw aggregate: /var/lib/foo"],
     )
-    assert policy.schema_version == 2
+    assert policy.schema_version == 3
     assert policy.warnings == ["unknown_rw aggregate: /var/lib/foo"]
 
 
@@ -151,6 +156,7 @@ def test_policy_json_warnings_defaults_to_empty_list() -> None:
     policy = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=False,
@@ -197,3 +203,98 @@ def test_tracejson_start_cmd_defaults_to_none_for_backwards_compat() -> None:
     }
     tj = TraceJson.model_validate(payload)
     assert tj.start_cmd is None
+
+
+def _runtime() -> PolicyRuntime:
+    return PolicyRuntime(
+        volumes=[],
+        tmpfs=[],
+        binds_ro=[],
+        publish_ports=[],
+        caps_add=[],
+        seccomp_syscalls=[],
+        read_only_rootfs=False,
+    )
+
+
+def test_policy_schema_version_is_three() -> None:
+    policy = PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
+            post_install_cleanup=[],
+            systemd_required=False,
+            entrypoint=["/x"],
+        ),
+        runtime=_runtime(),
+    )
+    assert policy.schema_version == 3
+
+
+def test_executable_installer_roundtrips_via_json() -> None:
+    policy = PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
+            post_install_cleanup=[],
+            systemd_required=False,
+            entrypoint=["/x"],
+        ),
+        runtime=_runtime(),
+    )
+    blob = policy.model_dump_json()
+    back = PolicyJson.model_validate_json(blob)
+    assert isinstance(back.image.installer, ExecutableInstaller)
+    assert back.image.installer.path == "/installer"
+
+
+def test_deb_installer_roundtrips_via_json() -> None:
+    policy = PolicyJson(
+        image=PolicyImage(
+            base="ubuntu:24.04",
+            installer=DebInstaller(paths=["/tmp/foo.deb", "/tmp/bar.deb"]),
+            apt_sources=["deb http://example/x noble main"],
+            apt_keys=["example.gpg"],
+            post_install_cleanup=["/tmp/*.deb"],
+            systemd_required=False,
+            entrypoint=["/x"],
+        ),
+        runtime=_runtime(),
+    )
+    blob = policy.model_dump_json()
+    back = PolicyJson.model_validate_json(blob)
+    assert isinstance(back.image.installer, DebInstaller)
+    assert back.image.installer.paths == ["/tmp/foo.deb", "/tmp/bar.deb"]
+    assert back.image.apt_sources == ["deb http://example/x noble main"]
+    assert back.image.apt_keys == ["example.gpg"]
+
+
+def test_installer_path_field_is_rejected() -> None:
+    """The legacy installer_path field is gone; extra='forbid' rejects it."""
+    raw = json.dumps(
+        {
+            "schema_version": 3,
+            "image": {
+                "base": "ubuntu:24.04",
+                "installer_path": "/installer",
+                "apt_packages": [],
+                "post_install_cleanup": [],
+                "systemd_required": False,
+                "entrypoint": ["/x"],
+            },
+            "runtime": {
+                "volumes": [],
+                "tmpfs": [],
+                "binds_ro": [],
+                "publish_ports": [],
+                "caps_add": [],
+                "caps_drop": ["ALL"],
+                "seccomp_syscalls": [],
+                "read_only_rootfs": False,
+                "no_new_privileges": True,
+            },
+            "warnings": [],
+        }
+    )
+    with pytest.raises(ValidationError):
+        PolicyJson.model_validate_json(raw)
