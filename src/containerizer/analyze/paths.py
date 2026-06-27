@@ -38,7 +38,11 @@ HOST_CONFIG_PATHS = frozenset(
         "/etc/timezone",
     }
 )
-FILTERED_ROOTS = ("/proc/", "/sys/")
+# /proc and /sys are kernel pseudo-filesystems. /var/lib/containers is the
+# trace sandbox's own podman storage: the nested deb-install runs
+# podman-in-podman and, under rootful podman, writes there — that's tracer
+# infrastructure, never a workload volume (#119).
+FILTERED_ROOTS = ("/proc/", "/sys/", "/var/lib/containers/")
 
 
 @dataclass
