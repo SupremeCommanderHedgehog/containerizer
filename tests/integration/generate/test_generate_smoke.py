@@ -11,6 +11,7 @@ from click.testing import CliRunner
 
 from containerizer.analyze.cli import analyze_cmd
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyPort,
@@ -92,6 +93,7 @@ def test_full_emit_from_handcrafted_non_sentinel_policy(
     policy = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=["/var/cache/apt/archives/*", "/installer"],
             systemd_required=True,

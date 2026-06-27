@@ -8,6 +8,7 @@ from pathlib import Path
 from click.testing import CliRunner
 
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyPort,
@@ -27,6 +28,7 @@ def _write_policy(
     policy = PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=["/installer"],
             systemd_required=False,

@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyRuntime,
@@ -52,6 +53,7 @@ def _policy_minimal() -> PolicyJson:
     return PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=["/installer"],
             systemd_required=False,

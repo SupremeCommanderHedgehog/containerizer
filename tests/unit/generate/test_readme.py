@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyPort,
@@ -20,6 +21,7 @@ def _policy(
     return PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=False,

@@ -11,6 +11,7 @@ import pytest
 
 from containerizer.analyze.derive import SENTINEL_ENTRYPOINT
 from containerizer.analyze.schema import (
+    ExecutableInstaller,
     PolicyImage,
     PolicyJson,
     PolicyRuntime,
@@ -19,7 +20,11 @@ from containerizer.analyze.schema import (
 )
 from containerizer.build.config import BuildConfig
 from containerizer.build.paths import PathLayout, resolve_layout
-from containerizer.build.pipeline import PipelineError, run_pipeline
+from containerizer.build.pipeline import (
+    PipelineError,
+    _stage_install_inputs,
+    run_pipeline,
+)
 from containerizer.probe.schema import (
     BaseImageSuggestion,
     ElfProbe,
@@ -52,6 +57,7 @@ def _policy(entrypoint: list[str]) -> PolicyJson:
     return PolicyJson(
         image=PolicyImage(
             base="ubuntu:24.04",
+            installer=ExecutableInstaller(path="/installer"),
             apt_packages=[],
             post_install_cleanup=[],
             systemd_required=True,
@@ -130,8 +136,8 @@ def _parse_trace(c: Calls) -> Callable[[Path], TraceJson]:
     return fn
 
 
-def _derive_policy(c: Calls, policy: PolicyJson) -> Callable[[TraceJson], PolicyJson]:
-    def fn(trace: TraceJson) -> PolicyJson:
+def _derive_policy(c: Calls, policy: PolicyJson) -> Callable[..., PolicyJson]:
+    def fn(trace: TraceJson, install_inputs: object = None) -> PolicyJson:
         c.order.append("derive_policy")
         return policy
 
@@ -210,8 +216,11 @@ def _build_layout(tmp_path: Path) -> PathLayout:
 
 
 def _cfg(tmp_path: Path, **overrides: object) -> BuildConfig:
+    installer = tmp_path / "installer.bin"
+    if not installer.exists():
+        installer.write_text("x", encoding="utf-8")
     base: dict[str, object] = dict(
-        installer=tmp_path / "installer.bin",
+        installer=installer,
         name="demo",
         out_dir=tmp_path / "out",
     )
@@ -621,7 +630,9 @@ def test_pipeline_passes_multi_deb_fields_to_install_trace_fn(tmp_path: Path) ->
     layout.intermediates_dir.mkdir(parents=True, exist_ok=True)
 
     extra = tmp_path / "extra.deb"
+    extra.write_text("x", encoding="utf-8")
     key = tmp_path / "repo.gpg"
+    key.write_text("x", encoding="utf-8")
     sources = ("deb http://x noble main",)
 
     captured: dict[str, object] = {}
@@ -719,3 +730,79 @@ def test_pipeline_threads_start_cmd_and_effective_soak_to_install_trace_fn(tmp_p
     # once (for the ORIGINAL trace) and never again for verify retrace.
     assert calls.order.count("install_trace") == 1
     assert "verify_trace" not in calls.order
+
+
+def test_stage_install_inputs_executable_copies_to_installer(tmp_path: Path) -> None:
+    primary = tmp_path / "src" / "primary.bin"
+    primary.parent.mkdir()
+    primary.write_text("X", encoding="utf-8")
+    final = tmp_path / "final"
+    final.mkdir()
+
+    _stage_install_inputs(
+        final_dir=final,
+        installer=primary,
+        extra_installers=(),
+        apt_keys=(),
+    )
+
+    assert (final / "installer").read_text(encoding="utf-8") == "X"
+    assert not (final / "installers").exists()
+    assert not (final / "apt-keys").exists()
+
+
+def test_stage_install_inputs_deb_copies_to_installers_subdir(tmp_path: Path) -> None:
+    primary = tmp_path / "src" / "foo.deb"
+    primary.parent.mkdir()
+    primary.write_text("DEB", encoding="utf-8")
+    extra = tmp_path / "src" / "bar.deb"
+    extra.write_text("EXTRA", encoding="utf-8")
+    final = tmp_path / "final"
+    final.mkdir()
+
+    _stage_install_inputs(
+        final_dir=final,
+        installer=primary,
+        extra_installers=(extra,),
+        apt_keys=(),
+    )
+
+    assert (final / "installers" / "foo.deb").read_text(encoding="utf-8") == "DEB"
+    assert (final / "installers" / "bar.deb").read_text(encoding="utf-8") == "EXTRA"
+    assert not (final / "installer").exists()
+
+
+def test_stage_install_inputs_apt_keys_copied_to_subdir(tmp_path: Path) -> None:
+    primary = tmp_path / "src" / "foo.deb"
+    primary.parent.mkdir()
+    primary.write_text("DEB", encoding="utf-8")
+    key = tmp_path / "src" / "mongodb.gpg"
+    key.write_text("KEY", encoding="utf-8")
+    final = tmp_path / "final"
+    final.mkdir()
+
+    _stage_install_inputs(
+        final_dir=final,
+        installer=primary,
+        extra_installers=(),
+        apt_keys=(key,),
+    )
+
+    assert (final / "apt-keys" / "mongodb.gpg").read_text(encoding="utf-8") == "KEY"
+
+
+def test_stage_install_inputs_no_apt_keys_skips_keys_subdir(tmp_path: Path) -> None:
+    primary = tmp_path / "src" / "foo.bin"
+    primary.parent.mkdir()
+    primary.write_text("X", encoding="utf-8")
+    final = tmp_path / "final"
+    final.mkdir()
+
+    _stage_install_inputs(
+        final_dir=final,
+        installer=primary,
+        extra_installers=(),
+        apt_keys=(),
+    )
+
+    assert not (final / "apt-keys").exists()
