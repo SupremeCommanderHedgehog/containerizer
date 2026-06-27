@@ -231,3 +231,29 @@ def test_unparseable_collector_fallback_log_is_ignored(tmp_path: Path) -> None:
     bundle = read_trace_dir(d)
     assert bundle.events["open"] == []
     assert any("fallback recorded" in w and "open" in w for w in bundle.warnings)
+
+
+def test_read_trace_dir_picks_up_start_cmd_file(tmp_path: Path) -> None:
+    d = _make_complete_trace(tmp_path)
+    (d / "START_CMD").write_text("/etc/init.d/mongod start", encoding="utf-8")
+    bundle = read_trace_dir(d)
+    assert bundle.start_cmd == "/etc/init.d/mongod start"
+
+
+def test_read_trace_dir_start_cmd_none_when_file_absent(tmp_path: Path) -> None:
+    d = _make_complete_trace(tmp_path)
+    # No START_CMD file written.
+    bundle = read_trace_dir(d)
+    assert bundle.start_cmd is None
+
+
+def test_read_trace_dir_start_cmd_verbatim_when_file_empty(tmp_path: Path) -> None:
+    """Reader is verbatim per spec §3.1: empty START_CMD file -> "" (not None).
+    CLI normalization at the --start-cmd boundary is the layer that prevents
+    empty strings from being written here in the first place. This test pins
+    the verbatim behavior so a future "normalize at reader" regression is caught.
+    """
+    d = _make_complete_trace(tmp_path)
+    (d / "START_CMD").write_text("", encoding="utf-8")
+    bundle = read_trace_dir(d)
+    assert bundle.start_cmd == ""
