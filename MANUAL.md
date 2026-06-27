@@ -452,8 +452,8 @@ PS> containerizer build .\unifi_sysvinit_all.deb `
 
 **Setup.**
 
-1. `unifi_sysvinit_all.deb` in repo root (UniFi 10.4.x).
-2. `mongodb-org-server_8.0.x_amd64.deb` in repo root (matching the UniFi dependency).
+1. `unifi_sysvinit_all.deb` in repo root (UniFi 10.4.x). UniFi ships both a sysvinit script (`/etc/init.d/unifi`) and a systemd unit.
+2. `mongodb-org-server_8.0.x_amd64.deb` in repo root (matching the UniFi dependency). **Note:** this package is systemd-only — it ships `mongod.service` but **no** `/etc/init.d/mongod`. The nested install container runs `sleep infinity` (no systemd), so the daemon must be started directly from its shipped config (`mongod --config /etc/mongod.conf --fork`, as `mongodb`), not via `service`/`/etc/init.d/mongod`.
 
 **Run.**
 
@@ -463,7 +463,7 @@ PowerShell:
 PS> containerizer build .\unifi_sysvinit_all.deb `
         --installer .\mongodb-org-server_8.0.26_amd64.deb `
         --name unifi `
-        --start-cmd '/etc/init.d/mongod start && sleep 10 && /etc/init.d/unifi start' `
+        --start-cmd 'runuser -u mongodb -- mongod --config /etc/mongod.conf --fork && sleep 10 && /etc/init.d/unifi start' `
         --start-ready-seconds 120 `
         --keep-intermediates `
         --skip-verify
@@ -475,7 +475,7 @@ Bash:
 $ containerizer build ./unifi_sysvinit_all.deb \
         --installer ./mongodb-org-server_8.0.26_amd64.deb \
         --name unifi \
-        --start-cmd '/etc/init.d/mongod start && sleep 10 && /etc/init.d/unifi start' \
+        --start-cmd 'runuser -u mongodb -- mongod --config /etc/mongod.conf --fork && sleep 10 && /etc/init.d/unifi start' \
         --start-ready-seconds 120 \
         --keep-intermediates \
         --skip-verify
