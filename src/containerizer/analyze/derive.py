@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+from containerizer.analyze.reader import InstallInputs
 from containerizer.analyze.schema import (
+    DebInstaller,
+    ExecutableInstaller,
+    InstallerSpec,
     PolicyImage,
     PolicyJson,
     PolicyPort,
@@ -19,6 +23,7 @@ SYSTEMD_COMMS = frozenset({"systemd", "systemctl", "init", "systemd-tmpfiles"})
 def derive_policy(
     trace: TraceJson,
     *,
+    install_inputs: InstallInputs | None = None,
     probe_base: str = "ubuntu:24.04",
     warnings: list[str] | None = None,
 ) -> PolicyJson:
@@ -55,12 +60,18 @@ def derive_policy(
     else:
         entrypoint = [SENTINEL_ENTRYPOINT]
 
+    installer = _build_installer_spec(install_inputs)
+    apt_sources = list(install_inputs.apt_sources) if install_inputs else []
+    apt_keys = list(install_inputs.apt_keys) if install_inputs else []
+
     return PolicyJson(
         image=PolicyImage(
             base=probe_base,
+            installer=installer,
+            apt_sources=apt_sources,
+            apt_keys=apt_keys,
             apt_packages=[],
-            installer_path="/installer",
-            post_install_cleanup=["/var/cache/apt/archives/*", "/installer"],
+            post_install_cleanup=_post_install_cleanup_for(installer),
             systemd_required=systemd_required,
             entrypoint=entrypoint,
         ),
@@ -75,6 +86,29 @@ def derive_policy(
         ),
         warnings=final_warnings,
     )
+
+
+def _build_installer_spec(install_inputs: InstallInputs | None) -> InstallerSpec:
+    """Decide DebInstaller vs ExecutableInstaller from the markers.
+
+    Rule: if installers is empty (no markers), legacy single-executable
+    shape. If the primary basename ends in '.deb', treat all as .deb
+    (CLI's _validate_multi_deb_flags already ensures extras are .deb).
+    Otherwise, single executable at /installer.
+    """
+    if install_inputs is None or not install_inputs.installers:
+        return ExecutableInstaller(path="/installer")
+    primary = install_inputs.installers[0]
+    if primary.endswith(".deb"):
+        paths = [f"/tmp/{name}" for name in install_inputs.installers]
+        return DebInstaller(paths=paths)
+    return ExecutableInstaller(path="/installer")
+
+
+def _post_install_cleanup_for(installer: InstallerSpec) -> list[str]:
+    if isinstance(installer, DebInstaller):
+        return ["/tmp/*.deb", "/var/lib/apt/lists/*", "/var/cache/apt/archives/*"]
+    return ["/var/cache/apt/archives/*", "/installer"]
 
 
 def _derive_volumes(persistent_paths: list[TracePath]) -> list[PolicyVolume]:
