@@ -320,3 +320,45 @@ def test_derive_no_install_inputs_falls_back_to_executable() -> None:
     policy = derive_policy(_make_trace())
     assert isinstance(policy.image.installer, ExecutableInstaller)
     assert policy.image.installer.path == "/installer"
+
+
+def _phase_with_syscalls(ids: list[int]) -> TracePhase:
+    return TracePhase(
+        duration_s=1.0,
+        paths=[],
+        ports=[],
+        outbound=[],
+        caps=[],
+        syscalls=ids,
+        execs=[],
+    )
+
+
+def test_seccomp_syscalls_union_install_and_runtime() -> None:
+    trace = _make_trace(
+        install=_phase_with_syscalls([1, 2]),
+        runtime=_phase_with_syscalls([3]),
+    )
+    policy = derive_policy(trace)
+    assert policy.runtime.seccomp_syscalls == [1, 2, 3]
+
+
+def test_seccomp_syscalls_includes_install_when_runtime_empty() -> None:
+    # Issue #116: a syscall first observed during install must still land in the
+    # seccomp allowlist even though runtime.syscalls is empty (the collector
+    # buckets each syscall into the phase of its first occurrence).
+    trace = _make_trace(
+        install=_phase_with_syscalls([10, 20, 30]),
+        runtime=_phase_with_syscalls([]),
+    )
+    policy = derive_policy(trace)
+    assert policy.runtime.seccomp_syscalls == [10, 20, 30]
+
+
+def test_seccomp_syscalls_deduped_and_sorted() -> None:
+    trace = _make_trace(
+        install=_phase_with_syscalls([59, 1]),
+        runtime=_phase_with_syscalls([1, 2]),
+    )
+    policy = derive_policy(trace)
+    assert policy.runtime.seccomp_syscalls == [1, 2, 59]
