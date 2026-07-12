@@ -220,7 +220,7 @@ PS> containerizer analyze .\unifi-trace\ -o .\unifi-analyze\
 wrote unifi-analyze\trace.json and unifi-analyze\policy.json
 ```
 
-`trace.json` is the normalized view of the raw collector streams (paths classified into image_static / persistent_rw / ephemeral_rw / host_config_ro / device / unknown_rw / unknown_ro, ports aggregated, capabilities deduped, syscalls listed). `policy.json` is the derived input to the M4 generator (volumes, tmpfs, binds_ro, publish_ports, caps_add, seccomp_syscalls, entrypoint). See `docs/superpowers/specs/2026-06-07-containerizer-m3-analyzer-policy.md` for the full schema.
+`trace.json` is the normalized view of the raw collector streams (paths classified into image_static / persistent_rw / ephemeral_rw / host_config_ro / device / unknown_rw / unknown_ro, ports aggregated, capabilities deduped, syscalls listed). `policy.json` is the derived input to the M4 generator (volumes, tmpfs, binds_ro, publish_ports, caps_add, seccomp_syscalls, entrypoint).
 
 ## Scenario 8 — Generate hardened container artifacts
 
@@ -231,7 +231,7 @@ PS> containerizer generate .\unifi-analyze\policy.json -n unifi-os -o .\unifi-bu
 sentinel entrypoint detected — skipping Containerfile and unifi-os.container
 ```
 
-The generator writes `Containerfile`, `<name>.container` (a systemd Quadlet unit), `seccomp.json` (OCI-format syscall allowlist), and `README.md` (audit trail) into `<out-dir>`. When the policy's entrypoint is the sentinel `["__UNSET__"]` (no recognizable daemon was traced), the Containerfile and Quadlet are skipped; the seccomp profile and README still ship so you can diff against future runs. See `docs/superpowers/specs/2026-06-07-containerizer-m4-generators.md` for the full contract.
+The generator writes `Containerfile`, `<name>.container` (a systemd Quadlet unit), `seccomp.json` (OCI-format syscall allowlist), and `README.md` (audit trail) into `<out-dir>`. When the policy's entrypoint is the sentinel `["__UNSET__"]` (no recognizable daemon was traced), the Containerfile and Quadlet are skipped; the seccomp profile and README still ship so you can diff against future runs.
 
 ## Scenario 9 — Verify the generated policy
 
@@ -242,7 +242,7 @@ PS> containerizer verify --original .\unifi-analyze\trace.json --observed .\unif
 verify: 1 new paths, 0 new ports, 0 new caps, 2 new syscalls, 0 new execs
 ```
 
-The exit code is 0 if the observed trace's runtime events are a subset of the original's, or 1 if any new events appear. `verify.json` lists exactly what was new in each category so you can decide whether to re-run with a longer interaction or to relax the policy. See `docs/superpowers/specs/2026-06-08-containerizer-m5-verify.md` for the full contract. (Rebuilding + re-tracing the generated container will land in M6's `build` subcommand; for now those steps are manual.)
+The exit code is 0 if the observed trace's runtime events are a subset of the original's, or 1 if any new events appear. `verify.json` lists exactly what was new in each category so you can decide whether to re-run with a longer interaction or to relax the policy. (Rebuilding + re-tracing the generated container will land in M6's `build` subcommand; for now those steps are manual.)
 
 ## Scenario 10 — Synthetic installer end-to-end through `build`
 
@@ -385,7 +385,7 @@ The model is `frozen=True` end-to-end (`pydantic` v2), so any downstream code th
 
 ## What's *not* in this manual
 
-- **Trace-and-learn** (running the installer, capturing syscalls/files/network). Not built yet — see the design spec at `docs/superpowers/specs/2026-06-06-containerizer-design.md` for the M2 plan.
+- **Trace-and-learn** (running the installer, capturing syscalls/files/network) is covered by the `trace` and `analyze` scenarios above rather than this static-probe walkthrough.
 - **`Containerfile` / Quadlet emission.** Same — depends on M2 output.
 - **Anything inside a Podman machine.** The probe is pure static analysis; it doesn't need Podman, a sandbox, or root.
 

@@ -8,9 +8,8 @@ software actually uses, and emits a deny-by-default `Containerfile` plus a
 systemd Quadlet unit whose exceptions are exactly those the trace observed and
 nothing more.
 
-**Status:** very early. See
-[`docs/superpowers/specs/2026-06-06-containerizer-design.md`](docs/superpowers/specs/2026-06-06-containerizer-design.md)
-for the design spec.
+**Status:** early. See [`MANUAL.md`](MANUAL.md) for a scenario-driven walkthrough
+of the `probe`, `trace`, `analyze`, `generate`, `verify`, and `build` subcommands.
 
 ## Requirements
 
