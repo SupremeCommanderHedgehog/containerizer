@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.9.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.8.0...v0.9.0) (2026-07-12)
+
+
+### Features
+
+* **generate:** multi-deb + apt-source Containerfile ([#111](https://github.com/SupremeCommanderHedgehog/containerizer/issues/111)) ([#113](https://github.com/SupremeCommanderHedgehog/containerizer/issues/113)) ([4c982ac](https://github.com/SupremeCommanderHedgehog/containerizer/commit/4c982ac1080d44f436f319acc5f94332ff149ec1))
+
+
+### Bug Fixes
+
+* **analyze:** filter tracer's /var/lib/containers from path classification ([#119](https://github.com/SupremeCommanderHedgehog/containerizer/issues/119)) ([#120](https://github.com/SupremeCommanderHedgehog/containerizer/issues/120)) ([09065e5](https://github.com/SupremeCommanderHedgehog/containerizer/commit/09065e57514126e3f4177db9592e8934ed3da097))
+* **analyze:** seccomp allowlist = union(install, runtime) syscalls ([#116](https://github.com/SupremeCommanderHedgehog/containerizer/issues/116)) ([#118](https://github.com/SupremeCommanderHedgehog/containerizer/issues/118)) ([bb82edd](https://github.com/SupremeCommanderHedgehog/containerizer/commit/bb82edddd0b9523c9e51d5308d92295cf23d6e70))
+* **analyze:** wire --start-cmd as entrypoint when no systemd ([#110](https://github.com/SupremeCommanderHedgehog/containerizer/issues/110)) ([669ff46](https://github.com/SupremeCommanderHedgehog/containerizer/commit/669ff462a9415c0e5a296414a44f3f0d32f17efc))
+* **trace:** publish VERIFY_* env into the sandbox so verify mode works ([#114](https://github.com/SupremeCommanderHedgehog/containerizer/issues/114)) ([#117](https://github.com/SupremeCommanderHedgehog/containerizer/issues/117)) ([4d1da66](https://github.com/SupremeCommanderHedgehog/containerizer/commit/4d1da66711182334cec04d1307be82aebb5f99aa))
+
+
+### Documentation
+
+* **MANUAL:** add bash variant of scenario 14 run command ([#108](https://github.com/SupremeCommanderHedgehog/containerizer/issues/108)) ([031e0ef](https://github.com/SupremeCommanderHedgehog/containerizer/commit/031e0eff50318980ec10ddc887202a8bebfaafc1))
+* **MANUAL:** fix scenario-14 start-cmd — mongodb-org-server is systemd-only ([#115](https://github.com/SupremeCommanderHedgehog/containerizer/issues/115)) ([0486630](https://github.com/SupremeCommanderHedgehog/containerizer/commit/048663044ce5d9fb1d33f08536e3405c999b090b))
+
 ## [0.8.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.7.0...v0.8.0) (2026-06-22)
 
 
