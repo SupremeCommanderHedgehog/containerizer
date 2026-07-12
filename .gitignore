@@ -43,3 +43,9 @@ Desktop.ini
 # Local env (per-machine test fixtures, installer paths)
 .env
 .env.local
+
+# Local secrets (API tokens, credentials) — never commit
+.secrets/
+
+# Build/run logs (per-machine diagnostics, not shared)
+*.log
