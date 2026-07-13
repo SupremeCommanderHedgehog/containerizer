@@ -183,7 +183,7 @@ def test_sentinel_skip_exits_0(tmp_path: Path) -> None:
 
 def test_install_trace_fn_passes_tty_from_stdin_isatty(tmp_path: Path) -> None:
     """`_default_install_trace_fn` must propagate sys.stdin.isatty() into the
-    TraceRunner so interactive installers (example-app etc.) get a TTY when the
+    TraceRunner so interactive installers get a TTY when the
     user is at a terminal, but stay non-TTY in CI/piped contexts."""
     installer = tmp_path / "i.bin"
     installer.write_text("x", encoding="utf-8")

@@ -34,7 +34,7 @@
 
 * **runner:** force LF line endings on runner-image scripts ([#88](https://github.com/SupremeCommanderHedgehog/containerizer/issues/88)) ([2671098](https://github.com/SupremeCommanderHedgehog/containerizer/commit/2671098b293602f86d46c12657065fa03ae138fd))
 * **trace,build:** allocate TTY for interactive installers + surface fallback gaps ([#91](https://github.com/SupremeCommanderHedgehog/containerizer/issues/91)) ([e9719eb](https://github.com/SupremeCommanderHedgehog/containerizer/commit/e9719eba38ed028a442757aca6e2ed074c6a456b))
-* **trace:** example-app Y/N prompt under systemd-PID-1 runner ([#97](https://github.com/SupremeCommanderHedgehog/containerizer/issues/97)) ([8fea5e2](https://github.com/SupremeCommanderHedgehog/containerizer/commit/8fea5e2754f99d012584f06a6b5b56cfcb935b16))
+* **trace:** interactive Y/N prompt under systemd-PID-1 runner ([#97](https://github.com/SupremeCommanderHedgehog/containerizer/issues/97)) ([8fea5e2](https://github.com/SupremeCommanderHedgehog/containerizer/commit/8fea5e2754f99d012584f06a6b5b56cfcb935b16))
 
 
 ### Documentation

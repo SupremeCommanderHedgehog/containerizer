@@ -132,7 +132,9 @@ def test_containerfile_deb_multi_with_apt_source_and_key() -> None:
         "deb [signed-by=/etc/apt/keyrings/mongodb.gpg] "
         "https://repo.mongodb.org/apt/ubuntu noble/mongodb-org/8.0 multiverse"
     ) in text
-    assert "COPY ./installers/example-app_sysvinit_all.deb /tmp/example-app_sysvinit_all.deb\n" in text
+    assert (
+        "COPY ./installers/example-app_sysvinit_all.deb /tmp/example-app_sysvinit_all.deb\n"
+    ) in text
     assert (
         "COPY ./installers/mongodb-org-server_8.0.26_amd64.deb "
         "/tmp/mongodb-org-server_8.0.26_amd64.deb\n"

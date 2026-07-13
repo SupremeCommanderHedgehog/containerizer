@@ -164,7 +164,7 @@ If you want to feel out the glibc → Ubuntu LTS mapping without finding seven r
 | `glibc_min` | Suggested base image |
 |---|---|
 | `null` (musl, static, or undetected) | `ubuntu:24.04` |
-| `< 2.31` (e.g. example-app installers on 2.30) | `ubuntu:20.04` |
+| `< 2.31` (e.g. some installers on 2.30) | `ubuntu:20.04` |
 | `2.31`–`2.35` | `ubuntu:22.04` |
 | `>= 2.36` | `ubuntu:24.04` |
 
@@ -216,8 +216,8 @@ Scenario 6 is also what the new `trace-integration` CI job runs on every PR (aga
 After `containerizer trace` produces a trace directory, run the analyzer to derive structured outputs:
 
 ```pwsh
-PS> containerizer analyze .\example-app-trace\ -o .\example-app-analyze\
-wrote example-app-analyze\trace.json and example-app-analyze\policy.json
+PS> containerizer analyze .\example-trace\ -o .\example-analyze\
+wrote example-analyze\trace.json and example-analyze\policy.json
 ```
 
 `trace.json` is the normalized view of the raw collector streams (paths classified into image_static / persistent_rw / ephemeral_rw / host_config_ro / device / unknown_rw / unknown_ro, ports aggregated, capabilities deduped, syscalls listed). `policy.json` is the derived input to the M4 generator (volumes, tmpfs, binds_ro, publish_ports, caps_add, seccomp_syscalls, entrypoint).
@@ -227,7 +227,7 @@ wrote example-app-analyze\trace.json and example-app-analyze\policy.json
 After `containerizer analyze` produces a `policy.json`, run the generator to emit the container build context and runtime policy:
 
 ```pwsh
-PS> containerizer generate .\example-app-analyze\policy.json -n example-app -o .\example-app-build\
+PS> containerizer generate .\example-analyze\policy.json -n example-app -o .\example-build\
 sentinel entrypoint detected — skipping Containerfile and example-app.container
 ```
 
@@ -238,7 +238,7 @@ The generator writes `Containerfile`, `<name>.container` (a systemd Quadlet unit
 After running `containerizer generate` to produce artifacts, rebuild the image, run it briefly, capture a fresh trace, run `containerizer analyze` on that trace, and then diff the new `trace.json` against the original with `verify`:
 
 ```pwsh
-PS> containerizer verify --original .\example-app-analyze\trace.json --observed .\example-app-rerun-analyze\trace.json -o .\example-app-verify\
+PS> containerizer verify --original .\example-analyze\trace.json --observed .\example-rerun-analyze\trace.json -o .\example-verify\
 verify: 1 new paths, 0 new ports, 0 new caps, 2 new syscalls, 0 new execs
 ```
 
@@ -247,7 +247,7 @@ The exit code is 0 if the observed trace's runtime events are a subset of the or
 ## Scenario 10 — Synthetic installer end-to-end through `build`
 
 **Goal:** Validate the M6 `build` pipeline against a real Podman machine
-without exercising the real example-app installer.
+without exercising a real third-party installer.
 
 **Prerequisites:** A running Podman machine on Linux/macOS/Windows. At
 least 10 GB free in the machine. A small ELF or shell-script installer
@@ -293,66 +293,6 @@ containerizer build .\path\to\synthetic.sh `
   `.intermediates/verify/target.err` and the collector JSONL under
   `.intermediates/trace/verify/` for syscall denials.
 
-## Scenario 11 — example-app installer end-to-end through `build`
-
-**Status (2026-06-10, post-#90):** Mechanically unblocked through the
-`loginctl enable-linger` failure point — #90's systemd-PID-1 runner
-boots stock systemd cleanly, `systemd-logind` is reachable, the system
-DBus bus is up, and the example-app installer launches successfully and
-reaches its `Proceed? (y/N):` prompt. example-app then instant-aborts with
-`User cancelled operation` before reading user input. Reproduced both
-backgrounded and foregrounded inside the orchestrator, so this is a
-separate stdin-mode issue inside the example-app installer itself, not a
-process-group or job-control problem with the orchestrator. Tracked
-as a follow-up to #90; end-to-end Scenario 11 acceptance is gated on
-that follow-up landing.
-
-**Goal:** Run the real example application installer end-to-end. Closes the
-design §11 open question about classifier rules at real-installer scale.
-
-**Prerequisites:** Same as scenario 10 plus the example-app installer binary
-(~875 MB; not committed to the repo). At least 30 GB free in the
-podman machine. A web browser to exercise the admin UI during the
-trace's interactive smoke phase.
-
-**Procedure:**
-
-```pwsh
-containerizer build .\example-app-installer.bin `
-    --name example-app `
-    --keep-intermediates `
-    --verify-soak-seconds 60
-```
-
-**Expected:**
-
-- `[trace]` shows the installer running for several minutes (example-app
-  installs MongoDB + JVM + the controller).
-- Interactive prompt; exercise the admin UI on `https://localhost:8443`
-  briefly (load the dashboard, navigate a few pages), then press Enter.
-- Build succeeds; `[verify]` produces either "no new events" or a small
-  diff. Either is acceptable for v0.1.0.
-- `out/example-app/` contains the full final-artifact set.
-- The README's `## Verify results` section enumerates any deltas for
-  triage; widen `policy.json` by hand and re-run `build` if needed.
-
-**What success looks like for the milestone:** The container starts under
-the Quadlet without manual fixup; the admin UI responds; restarting the
-unit preserves state via the named volume.
-
-**Common failure modes:**
-
-- Trace volume too large (example-app + MongoDB + JVM can produce hundreds of
-  MB of JSONL). If the analyze phase OOMs, set
-  `CONTAINERIZER_TRACE_DIR=/scratch` or similar on a larger filesystem.
-- Daemon doesn't bind a port within 30s of installer-complete: the
-  trace orchestrator's daemon-ready detection times out and the smoke
-  test runs in degraded mode. Press Enter sooner and rely on the
-  follow-up `verify` pass to validate.
-- Classifier produces `unknown_rw` aggregates: these get surfaced in
-  README's audit trail. Triage them manually; consider adding rules to
-  `src/containerizer/analyze/paths.py` if a pattern emerges.
-
 ## Output to a file
 
 Every scenario above can also write the JSON to disk instead of stdout — useful for diffing two probes:
@@ -391,7 +331,7 @@ The model is `frozen=True` end-to-end (`pydantic` v2), so any downstream code th
 
 If you hit something that doesn't match the manual, the repo's issue tracker is the right place: <https://github.com/SupremeCommanderHedgehog/containerizer/issues>.
 
-## Scenario 12 — Real example-app + locally-supplied mongodb-org-server (`--installer`)
+## Scenario 12 — Real `.deb` network app + locally-supplied mongodb-org-server (`--installer`)
 
 **Goal.** Containerize the real `example-app_sysvinit_all.deb` against a locally-downloaded `mongodb-org-server_8.0.x_amd64.deb`. Validates the `--installer` flow against a non-trivial real package.
 
@@ -416,9 +356,9 @@ PS> containerizer build .\example-app_sysvinit_all.deb `
 - `out/example-app/README.md` includes an `## Install inputs` section listing both debs.
 - `out/example-app/seccomp.json` exists. (Containerfile + Quadlet depend on entrypoint detection — may still be SKIPPED if the postinst doesn't expose a daemon under sleep-infinity; document whichever outcome.)
 
-## Scenario 13 — Real example-app via `--apt-source` against `repo.mongodb.org`
+## Scenario 13 — Real `.deb` network app via `--apt-source` against `repo.mongodb.org`
 
-**Goal.** Same example-app install but using the upstream MongoDB Inc repo signed with their official key. Validates `--apt-source` + `--apt-key` end-to-end against a real third-party repo.
+**Goal.** Same network-app install but using the upstream MongoDB Inc repo signed with their official key. Validates `--apt-source` + `--apt-key` end-to-end against a real third-party repo.
 
 **Setup.**
 
@@ -446,14 +386,14 @@ PS> containerizer build .\example-app_sysvinit_all.deb `
 - `install.log` shows apt fetching `mongodb-org-server` from `repo.mongodb.org`.
 - README's `## Install inputs` lists the apt-source with `[signed-by=…]` stripped.
 
-## Scenario 14 — example-app + MongoDB end-to-end with `--start-cmd` (#105)
+## Scenario 14 — Network app + MongoDB end-to-end with `--start-cmd` (#105)
 
 **Goal.** Validates that `--start-cmd` produces a non-sentinel `Containerfile` for a daemon-bearing multi-`.deb` install. After PR #103 the install transaction completes cleanly; this scenario exercises the new PR #105 wiring that actually starts the daemons inside the nested install container so the runtime phase observes their syscalls, binds, and caps.
 
 **Setup.**
 
-1. `example-app_sysvinit_all.deb` in repo root (example-app 10.4.x). example-app ships both a sysvinit script (`/etc/init.d/example-app`) and a systemd unit.
-2. `mongodb-org-server_8.0.x_amd64.deb` in repo root (matching the example-app dependency). **Note:** this package is systemd-only — it ships `mongod.service` but **no** `/etc/init.d/mongod`. The nested install container runs `sleep infinity` (no systemd), so the daemon must be started directly from its shipped config (`mongod --config /etc/mongod.conf --fork`, as `mongodb`), not via `service`/`/etc/init.d/mongod`.
+1. `example-app_sysvinit_all.deb` in repo root (an example network application, 10.4.x). It ships both a sysvinit script (`/etc/init.d/example-app`) and a systemd unit.
+2. `mongodb-org-server_8.0.x_amd64.deb` in repo root (matching the example application's dependency). **Note:** this package is systemd-only — it ships `mongod.service` but **no** `/etc/init.d/mongod`. The nested install container runs `sleep infinity` (no systemd), so the daemon must be started directly from its shipped config (`mongod --config /etc/mongod.conf --fork`, as `mongodb`), not via `service`/`/etc/init.d/mongod`.
 
 **Run.**
 
@@ -481,7 +421,7 @@ $ containerizer build ./example-app_sysvinit_all.deb \
         --skip-verify
 ```
 
-`--start-ready-seconds 120` is the floor for the JVM warmup + example-app schema migration (30–90 s observed). With `--start-cmd` set and no explicit `--verify-soak-seconds`, the install-phase runtime soak auto-scales to `max(60s, --start-ready-seconds)` — here, 120 s — so the analyzer sees real steady-state daemon activity rather than just startup.
+`--start-ready-seconds 120` is the floor for the JVM warmup + the application's schema migration (30–90 s observed). With `--start-cmd` set and no explicit `--verify-soak-seconds`, the install-phase runtime soak auto-scales to `max(60s, --start-ready-seconds)` — here, 120 s — so the analyzer sees real steady-state daemon activity rather than just startup.
 
 When `--start-cmd` is provided and the workload is not systemd-managed, the same string also becomes the image entrypoint (`bash -c '<start_cmd>'`). For systemd workloads, the entrypoint stays `/sbin/init` and the supplied `--start-cmd` is recorded as a no-op in `policy.warnings`.
 
@@ -492,7 +432,7 @@ When `--start-cmd` is provided and the workload is not systemd-managed, the same
 - `out/example-app/example-app.container` Quadlet unit present.
 - `out/example-app/seccomp.json` non-empty.
 - `out/example-app/README.md` contains a `Start command:` subsection under `## Install inputs` listing the literal command, `Ready timeout: 120s`, and `Verify soak: 120s`.
-- Runtime allowlist lists example-app ports `8443`, `8080`, `8843`, `8880` plus MongoDB `27017`.
+- Runtime allowlist lists the application's ports `8443`, `8080`, `8843`, `8880` plus MongoDB `27017`.
 - Volumes include `/var/lib/mongodb` and `/usr/lib/example-app/data`.
 - `out/example-app/.intermediates/trace/install/start.exitcode` is `0`; `start.log` shows both init scripts run.
 
@@ -500,7 +440,7 @@ When `--start-cmd` is provided and the workload is not systemd-managed, the same
 
 - The nested install container runs `sleep infinity` (no systemd), so `/etc/init.d/example-app start` may silently no-op via `policy-rc.d=101`. If `start.log` shows the init script returning 0 but `bind.jsonl` never records port 8443, fall back to direct invocations:
   ```
-  --start-cmd 'sudo -u mongodb /usr/bin/mongod --fork --config /etc/mongod.conf && sleep 5 && /usr/sbin/example-app-network-service-helper init && sudo -u example-app /usr/bin/java -jar /usr/lib/example-app/lib/app.jar start &'
+  --start-cmd 'sudo -u mongodb /usr/bin/mongod --fork --config /etc/mongod.conf && sleep 5 && /usr/sbin/example-app-service-helper init && sudo -u example-app /usr/bin/java -jar /usr/lib/example-app/lib/app.jar start &'
   ```
-- example-app expects `example-app_MONGODB_SERVICE_ENABLED=false` (the default in `/etc/default/example-app`). If MongoDB connectivity fails, verify that file wasn't overwritten by the user's `--start-cmd`.
+- The application expects `EXAMPLE_APP_MONGODB_SERVICE_ENABLED=false` (the default in `/etc/default/example-app`). If MongoDB connectivity fails, verify that file wasn't overwritten by the user's `--start-cmd`.
 - 1.5 GB minimum container memory: the JVM defaults to `-Xmx1024M` and crashes on smaller cgroups. Add `Memory=2G` to the generated Quadlet if you plan to run under a tight limit.

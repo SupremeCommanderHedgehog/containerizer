@@ -19,7 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[3]
 def test_loginctl_installer_succeeds_under_systemd_pid1(tmp_path: Path) -> None:
     """If systemd is NOT PID 1, loginctl fails with 'System has not been
     booted with systemd as init system'. This test fails the same way the
-    example-app installer did pre-#90."""
+    the example installer did pre-#90."""
     fixture = REPO_ROOT / "tests/fixtures/trace/loginctl-installer.sh"
     assert fixture.exists(), f"missing fixture: {fixture}"
 

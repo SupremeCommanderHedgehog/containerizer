@@ -7,7 +7,7 @@ body:
     id: software-name
     attributes:
       label: Software name
-      description: e.g., "example application", "Plex Media Server".
+      description: e.g., "the example application", "Plex Media Server".
     validations:
       required: true
   - type: input

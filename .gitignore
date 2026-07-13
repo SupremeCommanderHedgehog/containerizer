@@ -3,7 +3,6 @@
 *.deb
 *.rpm
 *.AppImage
-example-app-installer-*
 
 # Generated containerization artifacts
 /out/

@@ -187,14 +187,14 @@ run_elf_install() {
         # Interactive run (podman run -it from a real terminal): let
         # installer stdio flow through to the host terminal so
         # isatty(STDOUT_FILENO) is true and so the installer's stdin
-        # reads see the user's keystrokes. Installers like example-app check
-        # both before showing a Y/N prompt.
+        # reads see the user's keystrokes. Interactive installers commonly
+        # check both before showing a Y/N prompt.
         #
         # The `<&0` is load-bearing (#95): bash's documented behavior is
         # to auto-redirect the standard input of asynchronous (`&`)
         # commands to /dev/null when job control is off -- which is
         # always the case under a systemd unit's ExecStart. Without an
-        # explicit stdin redirect, example-app's Y/N prompt readline sees
+        # explicit stdin redirect, an interactive Y/N prompt's readline sees
         # EOF immediately and aborts with "User cancelled operation".
         # `<&0` inherits bash's stdin (the /dev/console pty set up by
         # the systemd unit's StandardInput=tty), bypassing the auto

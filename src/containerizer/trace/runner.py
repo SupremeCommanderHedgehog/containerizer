@@ -33,7 +33,7 @@ class TraceRunner:
     output_dir: Path
     mode: Literal["install", "verify"] = "install"
     # Install mode only. When True, append `-t` to `podman run` so the
-    # container gets a TTY -- needed for interactive installers like example-app
+    # container gets a TTY -- needed for interactive installers
     # that abort if their stdin prompt detects no terminal. Ignored in
     # verify mode (which is non-interactive by design).
     tty: bool = False

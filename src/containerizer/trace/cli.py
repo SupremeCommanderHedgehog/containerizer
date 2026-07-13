@@ -164,7 +164,7 @@ def trace_cmd(
         # under systemd-PID-1 takes the non-interactive branch even when the
         # user is sitting at a terminal -- which means bash auto-redirects
         # the backgrounded installer's stdin to /dev/null and Y/N prompts
-        # (example-app etc.) abort with empty input. build/cli.py already wires
+        # (interactive installers) abort with empty input. build/cli.py already wires
         # this; trace/cli.py was the asymmetric path.
         tty=sys.stdin.isatty(),
         extra_installers=tuple(p.resolve() for p in extra_installers),

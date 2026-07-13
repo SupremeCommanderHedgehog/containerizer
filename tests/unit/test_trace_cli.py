@@ -40,7 +40,7 @@ def test_trace_propagates_stdin_isatty_to_runner(tmp_path: Path) -> None:
     runner.py sets CONTAINERIZER_INTERACTIVE=1 when the user is at a
     terminal. Without this the orchestrator inside the runner takes the
     non-interactive branch and bash auto-redirects the backgrounded
-    installer's stdin to /dev/null, breaking Y/N prompts (e.g. example-app).
+    installer's stdin to /dev/null, breaking Y/N prompts.
     build/cli.py already wires this; trace/cli.py was the asymmetric path.
 
     Mirrors the test pattern build's test_install_trace_fn_passes_tty_from_stdin_isatty
