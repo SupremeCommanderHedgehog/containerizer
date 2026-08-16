@@ -36,8 +36,10 @@ Thumbs.db
 Desktop.ini
 .DS_Store
 
-# Claude Code local settings (per-machine, not shared)
-.claude/settings.local.json
+# Claude Code local state (per-developer; do not publish). Ignores the whole
+# directory, not just settings.local.json — an unignored .claude/CLAUDE.md was
+# sitting untracked here and would have gone in on a `git add .`.
+.claude/
 
 # Local env (per-machine test fixtures, installer paths)
 .env
@@ -45,6 +47,16 @@ Desktop.ini
 
 # Local secrets (API tokens, credentials) — never commit
 .secrets/
+
+# Secret material — belt-and-braces for anything the rules above don't name.
+*.pem
+*.key
+*.pfx
+*.p12
+id_rsa
+id_ed25519
+secrets.*
+credentials.*
 
 # Build/run logs (per-machine diagnostics, not shared)
 *.log
