@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: github/codeql-action/init@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      - uses: github/codeql-action/init@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
         with:
           languages: python
           queries: security-and-quality
@@ -29,7 +29,7 @@ jobs:
       # and fails the job. Marking the step continue-on-error keeps the
       # workflow green so it does not block PRs; CodeQL still runs and its
       # findings appear in the workflow log. Remove this once GHAS is on.
-      - uses: github/codeql-action/analyze@ff2f1c621b7f889edc0d3c761ac2e6a3f8cdb0dd  # v4.37.7
+      - uses: github/codeql-action/analyze@db488ddef3bf6cb639b32c2e9a7c0a7ea8271d28  # v4.37.8
         continue-on-error: true
         with:
           category: "/language:python"
