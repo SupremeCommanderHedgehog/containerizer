@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.1](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.9.0...v0.9.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **sandbox:** trace opens via raw_syscalls so open.bt works on Linux 7.0 ([#136](https://github.com/SupremeCommanderHedgehog/containerizer/issues/136)) ([9fa2cbb](https://github.com/SupremeCommanderHedgehog/containerizer/commit/9fa2cbb30c13663da3c8bcbc0600f028128db11e))
+
 ## [0.9.0](https://github.com/SupremeCommanderHedgehog/containerizer/compare/v0.8.0...v0.9.0) (2026-07-13)
 
 
