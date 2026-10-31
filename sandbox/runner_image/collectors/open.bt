@@ -1,30 +1,51 @@
 #!/usr/bin/env bpftrace
 /*
  * open.bt — emits {ts_ns, pid, comm, path, flags, mode, ret} JSONL records
- * for every openat(2) syscall. Stdout is captured by the orchestrator into
- * /work/trace/open.jsonl.
+ * for every open(2) / openat(2) syscall. Stdout is captured by the
+ * orchestrator into /work/trace/open.jsonl.
  *
  * Notes:
- *   * We track both sys_enter_openat (to capture flags, mode, path) and
- *     sys_exit_openat (to capture ret); join via @args[tid].
- *   * Failed opens (ret < 0) are deliberately included so the analyzer can
- *     distinguish "tried to read" from "actually read".
+ *   * Hooks raw_syscalls:sys_{enter,exit} filtered by syscall id, NOT the
+ *     per-syscall tracepoints (syscalls:sys_enter_openat etc.). On Linux 7.0
+ *     the per-syscall tracepoints silently drop most events when a BPF
+ *     program is attached (~20 of ~670 openat calls seen in a local repro,
+ *     and nothing from cat/python3/chown on the CI runner), with no
+ *     "Lost events" report. raw_syscalls is what syscalls.bt uses and it
+ *     sees every call on both 6.x and 7.0.
+ *   * Syscall ids are x86_64: open=2, openat=257. The runner image is
+ *     x86_64-only. open(2) is included because some programs (e.g. python3)
+ *     still call it directly.
+ *   * raw_syscalls args are untyped u64s, so the path pointer must be marked
+ *     as user memory with uptr() — a bare str() on it reads kernel memory
+ *     and comes back empty.
+ *   * Join enter -> exit via @path[tid]. Failed opens (ret < 0) are
+ *     deliberately included so the analyzer can distinguish "tried to read"
+ *     from "actually read".
  */
 
-tracepoint:syscalls:sys_enter_openat
+tracepoint:raw_syscalls:sys_enter
+/ args->id == 257 /
 {
-    @args[tid] = (uint64)args->filename;
-    @flags[tid] = args->flags;
-    @mode[tid] = args->mode;
+    @path[tid] = args->args[1];
+    @flags[tid] = args->args[2];
+    @mode[tid] = args->args[3];
 }
 
-tracepoint:syscalls:sys_exit_openat
-/ @args[tid] /
+tracepoint:raw_syscalls:sys_enter
+/ args->id == 2 /
 {
-    $path = str(@args[tid]);
+    @path[tid] = args->args[0];
+    @flags[tid] = args->args[1];
+    @mode[tid] = args->args[2];
+}
+
+tracepoint:raw_syscalls:sys_exit
+/ (args->id == 257 || args->id == 2) && @path[tid] /
+{
+    $path = str(uptr(@path[tid]));
     printf("{\"ts_ns\":%lld,\"pid\":%d,\"comm\":\"%s\",\"path\":\"%s\",\"flags\":%d,\"mode\":%d,\"ret\":%ld}\n",
-        nsecs, pid, comm, $path, @flags[tid], @mode[tid], args->ret);
-    delete(@args[tid]);
+        nsecs, pid, comm, $path, (int32)@flags[tid], (int32)@mode[tid], args->ret);
+    delete(@path[tid]);
     delete(@flags[tid]);
     delete(@mode[tid]);
 }
